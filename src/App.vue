@@ -479,7 +479,7 @@ function scrollToSection(id: string) {
           <span class="brand__tag">{{ txt.siteTagline }}</span>
         </a>
 
-        <div class="header__right">
+        <div class="header__end">
           <nav id="site-nav" class="nav" :data-open="menuOpen">
             <ul class="nav__list">
               <li v-for="item in navAnchors" :key="item.id">
@@ -489,34 +489,36 @@ function scrollToSection(id: string) {
               </li>
             </ul>
           </nav>
-          <div class="lang" role="group" :aria-label="txt.langSwitch">
+          <div class="header__tools">
+            <div class="lang" role="group" :aria-label="txt.langSwitch">
+              <button
+                type="button"
+                class="lang__btn"
+                :class="{ 'lang__btn--active': lang === 'zh' }"
+                @click="setLang('zh')"
+              >
+                中
+              </button>
+              <button
+                type="button"
+                class="lang__btn"
+                :class="{ 'lang__btn--active': lang === 'en' }"
+                @click="setLang('en')"
+              >
+                EN
+              </button>
+            </div>
             <button
               type="button"
-              class="lang__btn"
-              :class="{ 'lang__btn--active': lang === 'zh' }"
-              @click="setLang('zh')"
+              class="nav-toggle"
+              :aria-expanded="menuOpen"
+              aria-controls="site-nav"
+              @click="menuOpen = !menuOpen"
             >
-              中
-            </button>
-            <button
-              type="button"
-              class="lang__btn"
-              :class="{ 'lang__btn--active': lang === 'en' }"
-              @click="setLang('en')"
-            >
-              EN
+              <span class="nav-toggle__bar" />
+              <span class="nav-toggle__bar" />
             </button>
           </div>
-          <button
-            type="button"
-            class="nav-toggle"
-            :aria-expanded="menuOpen"
-            aria-controls="site-nav"
-            @click="menuOpen = !menuOpen"
-          >
-            <span class="nav-toggle__bar" />
-            <span class="nav-toggle__bar" />
-          </button>
         </div>
       </div>
     </header>
@@ -986,13 +988,22 @@ a:hover {
   gap: clamp(0.65rem, 2.5vw, 1.15rem);
 }
 
-.header__right {
+.header__end {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: clamp(0.5rem, 2vw, 1.15rem);
+  gap: clamp(0.85rem, 2vw, 1.35rem);
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/** 桌機：語切與漢堡與導覽同列；手機僅語切＋漢堡與 logo 左右對齊 */
+.header__tools {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -1070,8 +1081,9 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 1.35rem;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  justify-content: flex-end;
 }
 
 .nav__list {
@@ -1146,17 +1158,29 @@ a:hover {
 }
 
 @media (max-width: 1100px) {
+  .header__inner {
+    align-items: center;
+    flex-wrap: nowrap;
+    padding: 0.65rem 1rem;
+  }
+
+  /** 手機／窄螢幕文博會 logo 再小一級，釋出給右側工具列 */
   .brand__logo {
-    max-width: min(220px, 48vw);
+    height: clamp(1.32rem, 3.8vw, 1.65rem);
+    max-width: min(148px, 38vw);
   }
 
   .nav-toggle {
     display: flex;
   }
 
-  .header__right {
-    flex: 0 1 auto;
-    gap: 0.5rem;
+  /** 僅剩「語切｜選單」在列上；導覽連結全靠下方展開面板 */
+  .header__end {
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 0;
   }
 
   .nav {
@@ -1167,16 +1191,20 @@ a:hover {
     flex: none;
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start;
     gap: 0;
-    padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.6rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    margin: 0;
     background: linear-gradient(
       158deg,
-      rgba(252, 249, 245, 0.97),
-      rgba(218, 201, 180, 0.97)
+      rgba(252, 249, 245, 0.98),
+      rgba(218, 201, 180, 0.98)
     );
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
+    box-shadow: 0 10px 28px rgba(20, 18, 26, 0.06);
     display: none;
+    z-index: 50;
   }
 
   .nav[data-open='true'] {
@@ -1187,16 +1215,33 @@ a:hover {
     flex-direction: column;
     align-items: stretch;
     flex-wrap: nowrap;
+    width: 100%;
   }
 
   .nav__link {
     width: 100%;
     text-align: left;
-    padding: 0.65rem 0.5rem;
+    padding: 0.72rem 0.4rem;
+    font-size: 1rem;
+    border-radius: 8px;
   }
 
   .lang {
     flex-shrink: 0;
+  }
+
+  .header__tools {
+    gap: 0.4rem;
+  }
+
+  .lang__btn {
+    padding: 0.32rem 0.58rem;
+    font-size: 0.78rem;
+    min-height: 38px;
+    min-width: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -1206,8 +1251,13 @@ a:hover {
   }
 
   .brand__logo {
-    height: clamp(1.75rem, 6.2vw, 2.15rem);
-    max-width: min(180px, 56vw);
+    height: 1.28rem;
+    max-width: min(122px, 50vw);
+  }
+
+  .nav-toggle {
+    width: 42px;
+    height: 42px;
   }
 }
 

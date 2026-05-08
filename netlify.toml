@@ -1,0 +1,16 @@
+# 務必由 Netlify 在建置時產生 dist，勿直接發布過期的 dist/ 靜態檔
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# 讓瀏覽器／CDN 優先取得最新 index.html（內含新版 JS/CSS 檔名）
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# 正式資產仍可長快取（檔名含 hash，更新時檔名會變）
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

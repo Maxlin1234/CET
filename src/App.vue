@@ -4,6 +4,8 @@ import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import type { Lang } from './i18n'
 import { messages } from './i18n'
 import { Gradient } from '@/Gradient.js'
+import gsap from 'gsap'
+import SplitType from 'split-type'
 
 function envNumber(value: string | undefined, fallback: number): number {
   const n = Number(value)
@@ -28,6 +30,12 @@ const admissionTab = ref<AdmissionTab>('notes')
 /** 關於我們字卡：捲入視窗後揭露動態 */
 const aboutCardRef = ref<HTMLElement | null>(null)
 const aboutCardVisible = ref(false)
+
+/** Banner 主／副標：拆字＋字重動畫節點（見 setupHeroFontWeightEffect） */
+const heroTitleFontWeightRef = ref<HTMLElement | null>(null)
+const heroTitleFontWeightRef_2 = ref<HTMLElement | null>(null)
+let heroFontWeightMedia: ReturnType<typeof gsap.matchMedia> | null = null
+
 let aboutCardObserver: IntersectionObserver | null = null
 
 function bindAboutCardObserver() {
@@ -59,6 +67,73 @@ function bindAboutCardObserver() {
 
 /** 用於是否初始化 WebGL Stripe 底（與 prefers-reduced-motion 一致） */
 const heroMotionOk = ref(true)
+
+function teardownHeroFontWeightEffect() {
+  heroFontWeightMedia?.revert()
+  heroFontWeightMedia = null
+}
+
+function setupHeroFontWeightEffect() {
+  teardownHeroFontWeightEffect()
+  if (typeof document === 'undefined') return
+  if (!heroMotionOk.value) return
+  const root = heroTitleFontWeightRef.value
+  const root2 = heroTitleFontWeightRef_2.value
+  if (!root || !root2) return
+
+  const isZh = lang.value === 'zh'
+  /** 中文：Noto Sans TC 字幅較大，略縮影響半徑、略抬基底字重，觸感較接近英文的 Playfair */
+  const MAX_DISTANCE = isZh ? 240 : 280
+  const MAX_FONT_WEIGHT = 800
+  const MIN_FONT_WEIGHT = isZh ? 320 : 200
+  const duration = isZh ? 0.42 : 0.55
+
+  heroFontWeightMedia = gsap.matchMedia()
+  heroFontWeightMedia.add('(min-width: 992px)', () => {
+    const splitMain = new SplitType(root, { types: 'chars' })
+    const splitStack = new SplitType(root2, { types: 'chars' })
+    const charsMain = splitMain.chars ?? []
+    const charsStack = splitStack.chars ?? []
+
+    if (!charsMain.length && !charsStack.length) {
+      return () => {
+        splitMain.revert()
+        splitStack.revert()
+      }
+    }
+
+    const onMove = (event: MouseEvent) => {
+      const mouseX = event.pageX
+      const mouseY = event.pageY
+      const step = (char: HTMLElement) => {
+        const itemRect = char.getBoundingClientRect()
+        const itemCenterX = itemRect.left + itemRect.width / 2 + window.scrollX
+        const itemCenterY = itemRect.top + itemRect.height / 2 + window.scrollY
+        const distance = Math.hypot(mouseX - itemCenterX, mouseY - itemCenterY)
+        const fontWeight =
+          distance < MAX_DISTANCE
+            ? gsap.utils.mapRange(
+                0,
+                MAX_DISTANCE,
+                MIN_FONT_WEIGHT,
+                MAX_FONT_WEIGHT,
+                Math.max(0, MAX_DISTANCE - distance),
+              )
+            : MIN_FONT_WEIGHT
+        gsap.to(char, { fontWeight, duration })
+      }
+      for (const char of charsMain) step(char)
+      for (const char of charsStack) step(char)
+    }
+
+    document.addEventListener('mousemove', onMove, { passive: true })
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      splitMain.revert()
+      splitStack.revert()
+    }
+  })
+}
 
 let motionMql: MediaQueryList | null = null
 
@@ -182,6 +257,12 @@ watch(heroMotionOk, (ok) => {
   }
 })
 
+watch([lang, heroMotionOk], async () => {
+  teardownHeroFontWeightEffect()
+  await nextTick()
+  if (heroMotionOk.value) setupHeroFontWeightEffect()
+})
+
 const stored = (): Lang | null => {
   if (typeof localStorage === 'undefined') return null
   const v = localStorage.getItem('usaf-lang')
@@ -224,9 +305,12 @@ onMounted(async () => {
   bindAboutCardObserver()
   bindWorksMarqueeSizing()
   startWorksMarqueeLoop()
+  await nextTick()
+  setupHeroFontWeightEffect()
 })
 
 onUnmounted(() => {
+  teardownHeroFontWeightEffect()
   aboutCardObserver?.disconnect()
   aboutCardObserver = null
   motionMql?.removeEventListener('change', onHeroMotionMqlChange)
@@ -242,9 +326,131 @@ onUnmounted(() => {
   stopWorksMarqueeLoop()
   worksResizeObserver?.disconnect()
   worksResizeObserver = null
+  window.removeEventListener('keydown', onWorksDetailKeydown)
+  if (typeof document !== 'undefined') document.body.style.overflow = ''
 })
 
 const txt = computed(() => messages[lang.value])
+
+function resolveWorkGalleryUrls(card: { image: string; gallery?: readonly string[] }): string[] {
+  const g = card.gallery?.filter((u) => typeof u === 'string' && u.length > 0)
+  if (g && g.length > 0) return [...g]
+  if (card.image) return [card.image]
+  return []
+}
+
+/** 跑馬燈拖曳：與 pointerdown 起點的最大水平距離，超過則不視為「點卡片」 */
+const worksMarqueeTravelPx = ref(0)
+const worksGestureStartX = ref(0)
+/** pointerdown 時手指底下的作品卡 index（由 data-work-card-index 取得） */
+const worksPointerDownCardIndex = ref<number | null>(null)
+
+const worksDetailIndex = ref<number | null>(null)
+const worksDetailSlideIx = ref(0)
+
+const worksDetailCard = computed(() => {
+  const ix = worksDetailIndex.value
+  if (ix == null) return null
+  return txt.value.works.cards[ix] ?? null
+})
+
+const worksDetailGalleryUrls = computed(() => {
+  const c = worksDetailCard.value
+  if (!c) return [] as string[]
+  return resolveWorkGalleryUrls(c)
+})
+
+const worksDetailSlideCount = computed(() => {
+  const n = worksDetailGalleryUrls.value.length
+  return n > 0 ? n : 1
+})
+
+const worksDetailCurrentImageSrc = computed(() => {
+  const urls = worksDetailGalleryUrls.value
+  if (urls.length === 0) return null as string | null
+  const n = urls.length
+  const i = ((worksDetailSlideIx.value % n) + n) % n
+  return urls[i] ?? null
+})
+
+function splitProseParagraphs(text: string): string[] {
+  return text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
+}
+
+const worksDetailIntroParagraphs = computed(() => {
+  const c = worksDetailCard.value as { intro?: string } | null
+  if (!c?.intro?.trim()) return [] as string[]
+  return splitProseParagraphs(c.intro)
+})
+
+const worksDetailSubtitle = computed(() => {
+  const c = worksDetailCard.value as { subtitle?: string } | null
+  const s = c?.subtitle?.trim()
+  return s || null
+})
+
+const worksDetailBodyParagraphs = computed(() => {
+  const c = worksDetailCard.value
+  if (!c?.body) return [] as string[]
+  return splitProseParagraphs(c.body)
+})
+
+function openWorksDetail(index: number) {
+  worksDetailIndex.value = index
+  worksDetailSlideIx.value = 0
+  nextTick(() => document.getElementById('works-detail-title')?.focus())
+}
+
+function closeWorksDetail() {
+  worksDetailIndex.value = null
+}
+
+function worksDetailStepSlide(delta: number) {
+  const n = worksDetailGalleryUrls.value.length
+  const slots = n > 0 ? n : 1
+  if (slots < 2) return
+  worksDetailSlideIx.value = (worksDetailSlideIx.value + delta + slots) % slots
+}
+
+function onWorksDetailKeydown(e: KeyboardEvent) {
+  if (worksDetailIndex.value == null) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeWorksDetail()
+    return
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    worksDetailStepSlide(-1)
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    worksDetailStepSlide(1)
+  }
+}
+
+let worksDetailTouchStartX = 0
+
+function onWorksDetailTouchStart(e: TouchEvent) {
+  worksDetailTouchStartX = e.changedTouches[0]?.clientX ?? 0
+}
+
+function onWorksDetailTouchEnd(e: TouchEvent) {
+  const x = e.changedTouches[0]?.clientX ?? worksDetailTouchStartX
+  const dx = x - worksDetailTouchStartX
+  if (Math.abs(dx) < 48) return
+  worksDetailStepSlide(dx < 0 ? 1 : -1)
+}
+
+watch(worksDetailIndex, (ix) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  if (ix != null) {
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onWorksDetailKeydown)
+  } else {
+    document.body.style.overflow = ''
+    window.removeEventListener('keydown', onWorksDetailKeydown)
+  }
+})
 
 /** 作品區：單行無縫跑馬燈（可拖曳；prefers-reduced-motion 時僅停自動捲動） */
 const worksSegmentRef = ref<HTMLElement | null>(null)
@@ -334,6 +540,16 @@ function toggleWorksMarqueePause() {
 
 function onWorksMarqueePointerDown(e: PointerEvent) {
   if (e.button !== 0) return
+  worksGestureStartX.value = e.clientX
+  worksMarqueeTravelPx.value = 0
+  const fromEl = (e.target as HTMLElement | null)?.closest?.('[data-work-card-index]')
+  if (fromEl instanceof HTMLElement) {
+    const raw = fromEl.dataset.workCardIndex
+    const ix = raw != null ? Number(raw) : NaN
+    worksPointerDownCardIndex.value = Number.isFinite(ix) ? ix : null
+  } else {
+    worksPointerDownCardIndex.value = null
+  }
   const t = e.currentTarget as HTMLElement
   worksDragging.value = true
   worksLastPointerX = e.clientX
@@ -344,6 +560,10 @@ function onWorksMarqueePointerDown(e: PointerEvent) {
 function onWorksMarqueePointerMove(e: PointerEvent) {
   if (!worksDragging.value || worksPointerId !== e.pointerId) return
   const dx = e.clientX - worksLastPointerX
+  worksMarqueeTravelPx.value = Math.max(
+    worksMarqueeTravelPx.value,
+    Math.abs(e.clientX - worksGestureStartX.value),
+  )
   worksLastPointerX = e.clientX
   worksOffsetPx.value += dx
   normalizeWorksMarqueeOffset()
@@ -351,6 +571,27 @@ function onWorksMarqueePointerMove(e: PointerEvent) {
 
 function onWorksMarqueePointerUp(e: PointerEvent) {
   if (worksPointerId !== e.pointerId) return
+  const tapCardIx = worksPointerDownCardIndex.value
+  const travel = worksMarqueeTravelPx.value
+  worksPointerDownCardIndex.value = null
+  const t = e.currentTarget as HTMLElement
+  worksDragging.value = false
+  worksPointerId = null
+  try {
+    t.releasePointerCapture(e.pointerId)
+  } catch {
+    /* ignore */
+  }
+  /** 跑馬燈持續位移時 click 常對不到元素，改於 pointerup 開啟 */
+  const TAP_PX = 24
+  if (tapCardIx != null && travel <= TAP_PX) {
+    openWorksDetail(tapCardIx)
+  }
+}
+
+function onWorksMarqueePointerCancel(e: PointerEvent) {
+  if (worksPointerId !== e.pointerId) return
+  worksPointerDownCardIndex.value = null
   const t = e.currentTarget as HTMLElement
   worksDragging.value = false
   worksPointerId = null
@@ -361,14 +602,11 @@ function onWorksMarqueePointerUp(e: PointerEvent) {
   }
 }
 
-function onWorksMarqueePointerCancel(e: PointerEvent) {
-  onWorksMarqueePointerUp(e)
-}
-
 function onWorksMarqueeLostPointerCapture(e: PointerEvent) {
   if (worksPointerId !== e.pointerId) return
   worksDragging.value = false
   worksPointerId = null
+  worksPointerDownCardIndex.value = null
 }
 
 const scheduleCardVisible = reactive<Record<number, boolean>>({})
@@ -463,6 +701,12 @@ function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   menuOpen.value = false
 }
+
+function scrollToPageTop() {
+  if (typeof window === 'undefined') return
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+}
 </script>
 
 <template>
@@ -555,8 +799,16 @@ function scrollToSection(id: string) {
         <div class="hero__inner">
           <p class="hero__kicker">{{ txt.hero.kicker }}</p>
           <h1 class="hero__title">
-            {{ txt.hero.title }}
-            <span class="hero__title-stack">{{ txt.hero.subtitle }}</span>
+            <span
+              ref="heroTitleFontWeightRef"
+              class="hero__title-main"
+              :class="{ 'hero__title-main--ascii': lang === 'en' }"
+            >{{ txt.hero.title }}</span>
+            <span
+              ref="heroTitleFontWeightRef_2"
+              class="hero__title-stack"
+              :class="{ 'hero__title-stack--ascii': lang === 'en' }"
+            >{{ txt.hero.subtitle }}</span>
           </h1>
           <button type="button" class="btn btn--ghost" @click="scrollToSection('schedule')">
             {{ txt.hero.cta }}
@@ -775,6 +1027,12 @@ function scrollToSection(id: string) {
                   v-for="(card, i) in txt.works.cards"
                   :key="`w-a-${i}`"
                   class="work-card work-card--marquee"
+                  role="button"
+                  tabindex="0"
+                  :data-work-card-index="i"
+                  :aria-label="`${card.title} — ${txt.works.detailOpenHint}`"
+                  @keydown.enter.prevent="openWorksDetail(i)"
+                  @keydown.space.prevent="openWorksDetail(i)"
                 >
                   <div class="work-card__media">
                     <img
@@ -800,6 +1058,8 @@ function scrollToSection(id: string) {
                   v-for="(card, i) in txt.works.cards"
                   :key="`w-b-${i}`"
                   class="work-card work-card--marquee"
+                  tabindex="-1"
+                  :data-work-card-index="i"
                 >
                   <div class="work-card__media">
                     <img
@@ -852,11 +1112,227 @@ function scrollToSection(id: string) {
         <p class="footer__copy">{{ txt.footer.copy }}</p>
       </div>
     </footer>
+
+    <aside class="social-rail" :aria-label="txt.social.railAria">
+      <div class="social-rail__icons">
+        <a
+          class="social-rail__link"
+          :href="txt.social.urls.facebook"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="txt.social.facebook"
+        >
+          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"
+            />
+          </svg>
+        </a>
+        <a
+          class="social-rail__link"
+          :href="txt.social.urls.instagram"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="txt.social.instagram"
+        >
+          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5z"
+            />
+            <circle cx="12" cy="12" r="3.25" fill="none" stroke="currentColor" stroke-width="1.75" />
+            <circle cx="17" cy="7" r="1" fill="currentColor" />
+          </svg>
+        </a>
+        <a
+          class="social-rail__link"
+          :href="txt.social.urls.threads"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="txt.social.threads"
+        >
+          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              d="M9.2 7.3c1.8-1.1 4.1-.9 5.7.5 1.4 1.2 1.8 3.1 1 4.8-.9 1.8-2.9 2.7-5.3 2.1"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              d="M7 17.2c2.1 1.1 4.8.5 6.4-1.4 1.7-2 1.9-4.7.4-6.8"
+            />
+          </svg>
+        </a>
+        <a
+          class="social-rail__link"
+          :href="txt.social.urls.youtube"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="txt.social.youtube"
+        >
+          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="currentColor"
+              d="M23 7.5c0-1.4-.3-2.5-.9-3.4-.7-1-1.7-1.5-3.1-1.8C16.2 2 12 2 12 2s-4.2 0-7 .3c-1.4.3-2.4.9-3.1 1.8C1.3 5 1 6.1 1 7.5v9c0 1.4.3 2.5.9 3.4.7 1 1.8 1.6 3.1 1.8 2.8.3 7 .3 7 .3s4.2 0 7-.3c1.4-.2 2.4-.8 3.1-1.8.6-.9.9-2 .9-3.4v-9zM10 15.5v-7l6 3.5-6 3.5z"
+            />
+          </svg>
+        </a>
+        <a
+          class="social-rail__link social-rail__link--mail"
+          :href="txt.social.urls.email"
+          :aria-label="txt.social.email"
+        >
+          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 6h16v12H4V6zm0 0 8 6 8-6"
+            />
+          </svg>
+        </a>
+      </div>
+      <button
+        type="button"
+        class="social-rail__top"
+        :aria-label="txt.social.backToTop"
+        @click="scrollToPageTop"
+      >
+        <svg class="social-rail__top-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 19V5m0 0-7 7m7-7 7 7"
+          />
+        </svg>
+      </button>
+    </aside>
+
+    <Teleport to="body">
+      <div
+        v-if="worksDetailIndex !== null && worksDetailCard"
+        class="works-detail-scrim"
+        @click.self="closeWorksDetail"
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="works-detail-title"
+          class="works-detail"
+          @click.stop
+        >
+          <header class="works-detail__header">
+            <h2 id="works-detail-title" class="works-detail__heading" tabindex="-1">
+              {{ worksDetailCard.title }}
+            </h2>
+            <button
+              type="button"
+              class="works-detail__close"
+              :aria-label="txt.works.detailCloseAria"
+              @click="closeWorksDetail"
+            >
+              <span class="works-detail__close-icon" aria-hidden="true">×</span>
+            </button>
+          </header>
+          <div class="works-detail__divider" aria-hidden="true" />
+          <div class="works-detail__main">
+            <div class="works-detail__media">
+              <div
+                class="works-detail__carousel"
+                @touchstart.passive="onWorksDetailTouchStart"
+                @touchend="onWorksDetailTouchEnd"
+              >
+                <button
+                  v-if="worksDetailGalleryUrls.length > 1"
+                  type="button"
+                  class="works-detail__arrow works-detail__arrow--prev"
+                  :aria-label="txt.works.detailPrevAria"
+                  @click="worksDetailStepSlide(-1)"
+                />
+                <div class="works-detail__viewport">
+                  <img
+                    v-if="worksDetailCurrentImageSrc"
+                    :src="worksDetailCurrentImageSrc"
+                    :alt="worksDetailCard.title"
+                    class="works-detail__img"
+                    decoding="async"
+                  />
+                  <div v-else class="works-detail__placeholder" aria-hidden="true" />
+                </div>
+                <button
+                  v-if="worksDetailGalleryUrls.length > 1"
+                  type="button"
+                  class="works-detail__arrow works-detail__arrow--next"
+                  :aria-label="txt.works.detailNextAria"
+                  @click="worksDetailStepSlide(1)"
+                />
+              </div>
+              <div
+                v-if="worksDetailGalleryUrls.length > 1"
+                class="works-detail__dots"
+                role="tablist"
+              >
+                <button
+                  v-for="(_u, di) in worksDetailGalleryUrls"
+                  :key="'wdot-' + di"
+                  type="button"
+                  class="works-detail__dot"
+                  :class="{ 'works-detail__dot--active': worksDetailSlideIx === di }"
+                  :aria-label="`${di + 1} / ${worksDetailGalleryUrls.length}`"
+                  :aria-current="worksDetailSlideIx === di ? 'true' : undefined"
+                  @click="worksDetailSlideIx = di"
+                />
+              </div>
+            </div>
+            <div class="works-detail__prose">
+              <div v-if="worksDetailIntroParagraphs.length" class="works-detail__intro">
+                <p
+                  v-for="(para, pi) in worksDetailIntroParagraphs"
+                  :key="'wintro-' + pi"
+                  class="works-detail__intro-p"
+                >
+                  {{ para }}
+                </p>
+              </div>
+              <h3 v-if="worksDetailSubtitle" class="works-detail__subheading">
+                {{ worksDetailSubtitle }}
+              </h3>
+              <div class="works-detail__body">
+                <p
+                  v-for="(para, bi) in worksDetailBodyParagraphs"
+                  :key="'wbody-' + bi"
+                  class="works-detail__para"
+                >
+                  {{ para }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..600&family=Noto+Sans+TC:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..800;1,400..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..600&family=Noto+Sans+TC:wght@200..900&family=Playfair+Display:ital,wght@0,400..800;1,400..600&display=swap');
 
 *,
 *::before,
@@ -882,6 +1358,8 @@ function scrollToSection(id: string) {
   --accent: #b8860b;
   --accent-soft: rgba(184, 134, 11, 0.12);
   --line: rgba(20, 18, 26, 0.12);
+  /** 場次／入場／關於／作品／地圖 等區塊主標題（赭紅） */
+  --section-heading-terracotta: #d14d33;
   /** Stripe WebGL 四角色（首屏、footer、作品區 canvas 共用） */
   --stripe-gradient-color-1: #fff8e5;
   --stripe-gradient-color-2: #ffab1a;
@@ -934,6 +1412,123 @@ a:hover {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Fixed right social rail */
+.social-rail {
+  position: fixed;
+  z-index: 38;
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: max(4.75rem, env(safe-area-inset-top));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.social-rail > * {
+  pointer-events: auto;
+}
+
+.social-rail__icons {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.social-rail__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 10px;
+  background: transparent;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.social-rail__link:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.social-rail__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.social-rail__icon {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+.social-rail__top {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--paper);
+  background: var(--ink);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.social-rail__top:hover {
+  background: var(--ink-soft);
+}
+
+.social-rail__top:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.social-rail__top-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+@media (max-width: 360px) {
+  .social-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .social-rail__link,
+  .social-rail__top {
+    width: 38px;
+    height: 38px;
+  }
+
+  .social-rail__icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .social-rail__icons {
+    gap: 0.55rem;
+  }
 }
 
 .footer__canvas#gradient-canvas {
@@ -1379,6 +1974,24 @@ a:hover {
   z-index: 1;
 }
 
+.hero__title-main {
+  /* display: inline-block; */
+  /* display:flex;
+  flex-direction: row; */
+  display: inline-flex;
+  width: auto;
+}
+
+/** 英文主標以 Playfair 呈現；中文以 Noto（與變體字重動畫同一套字型） */
+.hero__title-main--ascii {
+  font-family: 'Playfair Display', 'Noto Sans TC', serif;
+}
+
+.hero__title-main:not(.hero__title-main--ascii) {
+  font-family: 'Noto Sans TC', 'Playfair Display', serif;
+  letter-spacing: 0.04em;
+}
+
 .hero__title-stack {
   display: block;
   font-size: 0.42em;
@@ -1388,6 +2001,14 @@ a:hover {
   color: var(--ink-soft);
 }
 
+.hero__title-stack--ascii {
+  font-family: 'Playfair Display', 'Noto Sans TC', serif;
+}
+
+.hero__title-stack:not(.hero__title-stack--ascii) {
+  font-family: 'Noto Sans TC', 'Playfair Display', serif;
+  letter-spacing: 0.06em;
+}
 
 .btn {
   position: relative;
@@ -1440,9 +2061,9 @@ a:hover {
   font-weight: 700;
   font-size: clamp(1.65rem, 4vw, 2.25rem);
   line-height: 1.18;
-  color: var(--ink);
+  color: var(--section-heading-terracotta);
   padding-bottom: 0.42rem;
-  border-bottom: 1px solid var(--ink);
+  border-bottom: 1px solid rgba(209, 77, 51, 0.38);
   width: fit-content;
   max-width: 100%;
 }
@@ -1884,7 +2505,7 @@ a:hover {
   font-size: clamp(1.85rem, 4.2vw, 2.5rem);
   letter-spacing: 0.02em;
   margin: 0;
-  color: var(--ink);
+  color: var(--section-heading-terracotta);
 }
 
 .works-marquee-toggle {
@@ -1992,6 +2613,12 @@ a:hover {
   flex: 0 0 auto;
   width: clamp(268px, 38vw, 320px);
   max-width: min(320px, 88vw);
+  cursor: pointer;
+}
+
+.work-card.work-card--marquee:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .work-card.work-card--marquee:hover {
@@ -2083,6 +2710,314 @@ a:hover {
   color: #58555f;
 }
 
+/** 作品詳情字卡（點擊跑馬燈卡片）：頂欄＋左圖右文，窄螢幕直向堆疊 */
+.works-detail-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  background: rgba(20, 18, 26, 0.52);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.works-detail {
+  position: relative;
+  width: min(100%, 52rem);
+  max-height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 18, 26, 0.1);
+  box-shadow: 0 28px 80px rgba(20, 18, 26, 0.22);
+}
+
+.works-detail__header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 0.95rem;
+  flex-shrink: 0;
+}
+
+.works-detail__heading {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: clamp(1.1rem, 2.8vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+}
+
+.works-detail__divider {
+  height: 1px;
+  margin: 0;
+  border: none;
+  background: rgba(20, 18, 26, 0.12);
+  flex-shrink: 0;
+}
+
+.works-detail__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.14fr) minmax(0, 0.86fr);
+  gap: 1.75rem 2rem;
+  align-items: stretch;
+  padding: 1.35rem 1.25rem 1.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.works-detail__media {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-self: stretch;
+}
+
+.works-detail__carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.works-detail__viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-height: min(64vh, 560px);
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #f0ebe6 0%, #e4dcd4 100%);
+}
+
+.works-detail__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.works-detail__placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 10rem;
+  background: linear-gradient(145deg, #f0ebe6 0%, #e4dcd4 100%);
+}
+
+.works-detail__close {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(20, 18, 26, 0.45);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.works-detail__close:hover {
+  color: var(--ink);
+  background: rgba(20, 18, 26, 0.05);
+}
+
+.works-detail__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.works-detail__close-icon {
+  font-size: 1.85rem;
+  font-weight: 300;
+  line-height: 1;
+  transform: translateY(-2px);
+}
+
+.works-detail__arrow {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.1);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.works-detail__arrow:hover {
+  background: #fff;
+}
+
+.works-detail__arrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.works-detail__arrow--prev::after {
+  content: '‹';
+  display: block;
+  transform: translateX(-1px);
+}
+
+.works-detail__arrow--next::after {
+  content: '›';
+  display: block;
+  transform: translateX(1px);
+}
+
+.works-detail__dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+}
+
+.works-detail__dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(20, 18, 26, 0.2);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.works-detail__dot--active {
+  background: var(--ink);
+  transform: scale(1.15);
+}
+
+.works-detail__dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.works-detail__prose {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-right: 0.35rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: #4f4b56;
+  scrollbar-gutter: stable;
+}
+
+.works-detail__intro {
+  margin-bottom: 1rem;
+}
+
+.works-detail__intro-p {
+  margin: 0 0 0.85em;
+  color: #5c5763;
+}
+
+.works-detail__intro-p:last-child {
+  margin-bottom: 0;
+}
+
+.works-detail__subheading {
+  margin: 0.25rem 0 0.75rem;
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.works-detail__body {
+  margin: 0;
+}
+
+.works-detail__para {
+  margin: 0 0 1em;
+  color: #4f4b56;
+}
+
+.works-detail__para:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 840px) {
+  .works-detail__main {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: unset;
+    gap: 1.25rem;
+    padding: 1.15rem 1rem 1.35rem;
+    overflow: hidden;
+  }
+
+  .works-detail__viewport {
+    min-height: min(52vh, 440px);
+    max-height: min(52vh, 480px);
+    margin: 0 auto;
+    width: 100%;
+    max-width: min(100%, 28rem);
+  }
+
+  .works-detail__prose {
+    flex: 1 1 auto;
+    min-height: 12rem;
+    max-height: min(38vh, 340px);
+    height: auto;
+    padding-right: 0.25rem;
+  }
+
+  .works-detail__arrow {
+    display: none;
+  }
+
+  .works-detail__carousel {
+    gap: 0;
+  }
+}
+
 .section--bottom {
   padding-bottom: 5rem;
 }
@@ -2098,6 +3033,7 @@ a:hover {
   font-size: clamp(1.65rem, 4vw, 2.25rem);
   margin: 0 0 1.5rem;
   line-height: 1.15;
+  color: var(--section-heading-terracotta);
 }
 
 .section__head {

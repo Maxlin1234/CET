@@ -479,25 +479,16 @@ function scrollToSection(id: string) {
           <span class="brand__tag">{{ txt.siteTagline }}</span>
         </a>
 
-        <button
-          type="button"
-          class="nav-toggle"
-          :aria-expanded="menuOpen"
-          aria-controls="site-nav"
-          @click="menuOpen = !menuOpen"
-        >
-          <span class="nav-toggle__bar" />
-          <span class="nav-toggle__bar" />
-        </button>
-
-        <nav id="site-nav" class="nav" :data-open="menuOpen">
-          <ul class="nav__list">
-            <li v-for="item in navAnchors" :key="item.id">
-              <button type="button" class="nav__link" @click="scrollToSection(item.id)">
-                {{ item.label }}
-              </button>
-            </li>
-          </ul>
+        <div class="header__right">
+          <nav id="site-nav" class="nav" :data-open="menuOpen">
+            <ul class="nav__list">
+              <li v-for="item in navAnchors" :key="item.id">
+                <button type="button" class="nav__link" @click="scrollToSection(item.id)">
+                  {{ item.label }}
+                </button>
+              </li>
+            </ul>
+          </nav>
           <div class="lang" role="group" :aria-label="txt.langSwitch">
             <button
               type="button"
@@ -516,7 +507,17 @@ function scrollToSection(id: string) {
               EN
             </button>
           </div>
-        </nav>
+          <button
+            type="button"
+            class="nav-toggle"
+            :aria-expanded="menuOpen"
+            aria-controls="site-nav"
+            @click="menuOpen = !menuOpen"
+          >
+            <span class="nav-toggle__bar" />
+            <span class="nav-toggle__bar" />
+          </button>
+        </div>
       </div>
     </header>
 
@@ -975,13 +976,23 @@ a:hover {
 }
 
 .header__inner {
+  position: relative;
   max-width: 1120px;
   margin: 0 auto;
   padding: 0.85rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: clamp(0.65rem, 2.5vw, 1.15rem);
+}
+
+.header__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(0.5rem, 2vw, 1.15rem);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .brand {
@@ -990,6 +1001,8 @@ a:hover {
   gap: 0.1rem;
   text-decoration: none;
   color: inherit;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .brand:focus-visible {
@@ -1022,6 +1035,7 @@ a:hover {
   gap: 6px;
   width: 44px;
   height: 44px;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: transparent;
@@ -1055,14 +1069,16 @@ a:hover {
 .nav {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.35rem;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .nav__list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
+  gap: 0.2rem clamp(0.35rem, 1.2vw, 0.6rem);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1093,6 +1109,7 @@ a:hover {
 
 .lang {
   display: inline-flex;
+  flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   overflow: hidden;
@@ -1101,10 +1118,10 @@ a:hover {
 
 .lang__btn {
   font: inherit;
-  font-size: 0.8rem;
+  font-size: clamp(0.74rem, 1.05vw + 0.62rem, 0.8rem);
   font-weight: 600;
   letter-spacing: 0.04em;
-  padding: 0.45rem 0.85rem;
+  padding: 0.38rem clamp(0.55rem, 1.8vw, 0.82rem);
   border: none;
   background: transparent;
   color: var(--ink-soft);
@@ -1128,20 +1145,30 @@ a:hover {
   z-index: 1;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+  .brand__logo {
+    max-width: min(220px, 48vw);
+  }
+
   .nav-toggle {
     display: flex;
   }
 
+  .header__right {
+    flex: 0 1 auto;
+    gap: 0.5rem;
+  }
+
   .nav {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 1px);
     left: 0;
     right: 0;
+    flex: none;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    padding: 0.75rem 1.25rem 1.25rem;
+    padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(
       158deg,
       rgba(252, 249, 245, 0.97),
@@ -1159,6 +1186,7 @@ a:hover {
   .nav__list {
     flex-direction: column;
     align-items: stretch;
+    flex-wrap: nowrap;
   }
 
   .nav__link {
@@ -1168,8 +1196,18 @@ a:hover {
   }
 
   .lang {
-    align-self: flex-start;
-    margin-top: 0.5rem;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand__tag {
+    display: none;
+  }
+
+  .brand__logo {
+    height: clamp(1.75rem, 6.2vw, 2.15rem);
+    max-width: min(180px, 56vw);
   }
 }
 

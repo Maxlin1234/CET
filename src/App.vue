@@ -1735,6 +1735,11 @@ a:hover {
   isolation: isolate;
   background: #fafaf9;
   overflow: hidden;
+  /**
+   * hover 陰影最大層約 0 38px 88px blur，底部可見尾很長；供子層 .works-marquee-bleed 繼承。
+   */
+  --works-marquee-shadow-room-t: clamp(2.6rem, 6.5vmin, 4rem);
+  --works-marquee-shadow-room-b: clamp(5rem, 18vmin, 9rem);
 }
 
 .works-board__canvas {
@@ -1846,6 +1851,14 @@ a:hover {
   max-width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  /**
+   * hover 時 translateY + 大 blur 的 box-shadow 會超出本區塊邊界；若僅 overflow:hidden
+   * 會在上下被硬裁切成橫線。留垂直空間再靠負 margin 抵銷版面高度（底部需比頂部大）。
+   */
+  padding-top: var(--works-marquee-shadow-room-t);
+  padding-bottom: var(--works-marquee-shadow-room-b);
+  margin-top: calc(-1 * var(--works-marquee-shadow-room-t));
+  margin-bottom: calc(-1 * var(--works-marquee-shadow-room-b));
   overflow: hidden;
   mask-image: linear-gradient(90deg, transparent 0%, #000 5%, #000 95%, transparent 100%);
   -webkit-mask-image: linear-gradient(
@@ -1894,22 +1907,25 @@ a:hover {
 }
 
 .work-card.work-card--marquee:hover {
-  transform: translateY(-4px);
+  transform: translateY(-4px) translateZ(0);
 }
 
 .work-card {
+  position: relative;
+  isolation: isolate;
   background: #fff;
   border-radius: 12px;
   border: 1px solid rgba(20, 18, 26, 0.08);
   box-shadow: 0 1px 0 rgba(20, 18, 26, 0.04), 0 12px 40px rgba(20, 18, 26, 0.05);
-  overflow: hidden;
+  /** 陰影畫在圓角外；與 overflow:hidden 同層易在邊緣出現裁切橫線，改由子層裁圖 */
+  overflow: visible;
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.26s ease, transform 0.26s ease;
 }
 
 .work-card:hover {
-  transform: translateY(-7px);
+  transform: translateY(-7px) translateZ(0);
   box-shadow:
     0 4px 12px rgba(20, 18, 26, 0.1),
     0 18px 40px rgba(20, 18, 26, 0.16),
@@ -1925,6 +1941,8 @@ a:hover {
     #e4dcd4 100%
   );
   position: relative;
+  border-radius: 11px 11px 0 0;
+  overflow: hidden;
 }
 
 .work-card__img {
@@ -1935,6 +1953,8 @@ a:hover {
 }
 
 .work-card__body {
+  border-radius: 0 0 11px 11px;
+  background: #fff;
   padding: 1.15rem 1.25rem 1.35rem;
   text-align: left;
 }

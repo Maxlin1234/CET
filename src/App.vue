@@ -797,7 +797,7 @@ function scrollToPageTop() {
           </svg>
         </div>
         <div class="hero__inner">
-          <p class="hero__kicker">{{ txt.hero.kicker }}</p>
+          <p class="kickerhero__">{{ txt.hero.kicker }}</p>
           <h1 class="hero__title">
             <span
               ref="heroTitleFontWeightRef"
@@ -1109,7 +1109,7 @@ function scrollToPageTop() {
       <div class="footer__inner">
         <p>{{ txt.footer.organizer }}</p>
         <p><a href="mailto:info@urban-spectrum.art">{{ txt.footer.contact }}</a></p>
-        <p class="footer__copy">{{ txt.footer.copy }}</p>
+        <p class="copyfooter__">{{ txt.footer.copy }}</p>
       </div>
     </footer>
 
@@ -3085,7 +3085,7 @@ a:hover {
   opacity: 0;
   transition:
     opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.2s ease;
 }
 
@@ -3103,6 +3103,12 @@ a:hover {
   transform: translateX(0);
 }
 
+/** 個別字卡 hover：僅該卡略往右上浮起 */
+.schedule-card--from-left.schedule-card--visible:hover,
+.schedule-card--from-right.schedule-card--visible:hover {
+  transform: translate(3px, -3px);
+}
+
 .schedule-card:hover {
   box-shadow: 0 1px 0 rgba(20, 18, 26, 0.05), 0 16px 40px rgba(20, 18, 26, 0.08);
 }
@@ -3110,11 +3116,11 @@ a:hover {
 .schedule-card__meta {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.1rem;
   padding: 0.35rem 0.75rem;
   border-radius: 10px;
-  background: var(--accent-soft);
-  border: 1px solid rgba(184, 134, 11, 0.18);
+  /* background: var(--accent-soft); */
+  /* border: 1px solid rgba(184, 134, 11, 0.18); */
 }
 
 .schedule-card__day {

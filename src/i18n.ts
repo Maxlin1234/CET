@@ -46,7 +46,7 @@ export const messages = {
     },
     schedule: {
       title: '場次',
-      note: '實際節目以現場公告為準',
+      note: '* 實際節目以現場公告為準',
       slots: [
         { day: '5/15（四）', time: '11:00–20:00', name: '開幕日／策展導覽 14:00' },
         { day: '5/16（五）', time: '11:00–20:00', name: '藝術家對談：城市與感官 16:30' },
@@ -127,7 +127,7 @@ export const messages = {
     footer: {
       organizer: '主辦：C-LAB當代文化實驗場',
       contact: '聯絡： info@clab.org.tw',
-      copy: '© 2025 C-LAB Future Vision Lab. All Rights Reserved.',
+      copy: '© 2026 C-LAB Future Vision Lab. All Rights Reserved.',
     },
     /** 右側社群直欄（連結請依實際官方帳號修改） */
     social: {
@@ -193,7 +193,7 @@ export const messages = {
     },
     schedule: {
       title: 'Schedule',
-      note: 'Programmes are subject to on-site announcements',
+      note: '＊Programmes are subject to on-site announcements',
       slots: [
         { day: 'Thu 15 May', time: '11:00–20:00', name: 'Opening / Curator tour 14:00' },
         { day: 'Fri 16 May', time: '11:00–20:00', name: 'Artist talk: city & senses 16:30' },
@@ -271,7 +271,7 @@ export const messages = {
     footer: {
       organizer: 'Presented by Urban Culture Fund × Photosynthesis Curatorial Lab',
       contact: 'Contact: info@urban-spectrum.art',
-      copy: '© 2025 C-LAB Future Vision Lab. All Rights Reserved.',
+      copy: '© 2026 C-LAB Future Vision Lab. All Rights Reserved.',
     },
     social: {
       railAria: 'Social media and contact',

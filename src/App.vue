@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import {
+  fetchProjectWorks,
+  getWorksApiConfig,
+  mapUnzipWorkToCard,
+  type UnzipWork,
+} from '@/api/unzipWorks'
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import type { Lang } from './i18n'
 import { messages } from './i18n'
+import type { WorkCard } from '@/types/workCard'
 import { Gradient } from '@/Gradient.js'
 import gsap from 'gsap'
 import SplitType from 'split-type'
+// import {THREE} from 'three';
+
 
 function envNumber(value: string | undefined, fallback: number): number {
   const n = Number(value)
@@ -27,46 +36,20 @@ const menuOpen = ref(false)
 type AdmissionTab = 'notes' | 'tickets'
 const admissionTab = ref<AdmissionTab>('notes')
 
-/** 關於我們字卡：捲入視窗後揭露動態 */
-const aboutCardRef = ref<HTMLElement | null>(null)
-const aboutCardVisible = ref(false)
+/** 用於是否初始化 WebGL Stripe 底（與 prefers-reduced-motion 一致） */
+const heroMotionOk = ref(true)
+
+/** true：首屏 Banner 使用全幅照片底；false：WebGL Stripe 動態底 */
+const HERO_BACKGROUND_PHOTO = true
+/** 底部 SVG 波浪裝飾（暫時關閉） */
+const SHOW_HERO_WAVE = false
+/** 首屏 Banner 照片（置於 `public/`，與作品區素材一致） */
+const HERO_BANNER_PHOTO_SRC = '/aboutus.jpeg'
 
 /** Banner 主／副標：拆字＋字重動畫節點（見 setupHeroFontWeightEffect） */
 const heroTitleFontWeightRef = ref<HTMLElement | null>(null)
 const heroTitleFontWeightRef_2 = ref<HTMLElement | null>(null)
 let heroFontWeightMedia: ReturnType<typeof gsap.matchMedia> | null = null
-
-let aboutCardObserver: IntersectionObserver | null = null
-
-function bindAboutCardObserver() {
-  if (typeof window === 'undefined') return
-  aboutCardObserver?.disconnect()
-  aboutCardObserver = null
-
-  if (!heroMotionOk.value) {
-    aboutCardVisible.value = true
-    return
-  }
-
-  nextTick(() => {
-    const el = aboutCardRef.value
-    if (!el) return
-    aboutCardObserver = new IntersectionObserver(
-      (entries) => {
-        const e = entries[0]
-        if (!e?.isIntersecting) return
-        aboutCardVisible.value = true
-        aboutCardObserver?.disconnect()
-        aboutCardObserver = null
-      },
-      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' },
-    )
-    aboutCardObserver.observe(el)
-  })
-}
-
-/** 用於是否初始化 WebGL Stripe 底（與 prefers-reduced-motion 一致） */
-const heroMotionOk = ref(true)
 
 function teardownHeroFontWeightEffect() {
   heroFontWeightMedia?.revert()
@@ -147,8 +130,7 @@ function onHeroMotionMqlChange() {
   syncHeroMotionPref()
 }
 
-/** 首屏 Stripe WebGL：`timeScale` 隨滑鼠移動強度調整（僅 banner） */
-/** 對比愈大、對位移愈敏感時，視覺上 Stripe 流速變化愈明顯 */
+/** 首屏 Stripe WebGL：`timeScale` 隨滑鼠移動強度（僅 banner 區 #hero） */
 const HERO_STRIPE_TS_MIN = 0.62
 const HERO_STRIPE_TS_MAX = 6.1
 const HERO_STRIPE_MAX_DELTA_PX = 16
@@ -249,11 +231,9 @@ function onHeroStripeMouseLeave() {
 watch(heroMotionOk, (ok) => {
   if (!ok) {
     resetHeroStripePointerSpeed()
-    aboutCardObserver?.disconnect()
-    aboutCardObserver = null
-    aboutCardVisible.value = true
-  } else if (!aboutCardVisible.value) {
-    bindAboutCardObserver()
+    stopAboutGlowIdleLoop()
+  } else {
+    startAboutGlowIdleLoop()
   }
 })
 
@@ -302,17 +282,16 @@ onMounted(async () => {
     }
   })
   await nextTick()
-  bindAboutCardObserver()
   bindWorksMarqueeSizing()
   startWorksMarqueeLoop()
+  void loadWorksFromApi()
   await nextTick()
   setupHeroFontWeightEffect()
+  if (heroMotionOk.value) startAboutGlowIdleLoop()
 })
 
 onUnmounted(() => {
   teardownHeroFontWeightEffect()
-  aboutCardObserver?.disconnect()
-  aboutCardObserver = null
   motionMql?.removeEventListener('change', onHeroMotionMqlChange)
   resetHeroStripePointerSpeed()
   heroStripeGradient?.disconnect()
@@ -328,9 +307,41 @@ onUnmounted(() => {
   worksResizeObserver = null
   window.removeEventListener('keydown', onWorksDetailKeydown)
   if (typeof document !== 'undefined') document.body.style.overflow = ''
+  stopAboutGlowIdleLoop()
 })
 
 const txt = computed(() => messages[lang.value])
+
+const apiWorks = ref<UnzipWork[] | null>(null)
+
+const worksCards = computed((): readonly WorkCard[] => {
+  if (apiWorks.value?.length) {
+    return apiWorks.value.map((work) => mapUnzipWorkToCard(work, lang.value))
+  }
+  return txt.value.works.cards
+})
+
+function workCardMarqueeText(card: { body: string }): string {
+  const first = card.body.split(/\n\n+/)[0]?.trim() ?? card.body.trim()
+  if (first.length <= 160) return first
+  return `${first.slice(0, 157)}…`
+}
+
+async function loadWorksFromApi() {
+  const { url, key } = getWorksApiConfig()
+  if (!key) return
+
+  try {
+    const items = await fetchProjectWorks(url, key)
+    if (items.length > 0) {
+      apiWorks.value = items
+      await nextTick()
+      measureWorksMarqueeSegment()
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[works] API fetch failed', error)
+  }
+}
 
 function resolveWorkGalleryUrls(card: { image: string; gallery?: readonly string[] }): string[] {
   const g = card.gallery?.filter((u) => typeof u === 'string' && u.length > 0)
@@ -351,7 +362,7 @@ const worksDetailSlideIx = ref(0)
 const worksDetailCard = computed(() => {
   const ix = worksDetailIndex.value
   if (ix == null) return null
-  return txt.value.works.cards[ix] ?? null
+  return worksCards.value[ix] ?? null
 })
 
 const worksDetailGalleryUrls = computed(() => {
@@ -684,6 +695,142 @@ watch(lang, (l) => {
   bindWorksMarqueeSizing()
 })
 
+/** 「關於我們」上方互動區：八格網格；sx／sy（垂直／水平）主線跟游標，側直線為左右半區中線 */
+const aboutGlowRef = ref<HTMLElement | null>(null)
+/** 區塊內游標對應 0–100%（分界與高光皆由此推算；閒置時由 requestAnimationFrame 緩動）*/
+const aboutGlowGlobalX = ref(50)
+const aboutGlowGlobalY = ref(48)
+/** 游標目前是否在本區 DOM 上 */
+const aboutGlowPointerInside = ref(false)
+/** 上一筆 pointer 活動時間（performance.now）；區內且在此時間窗內由游標駕駛，否則交給閒置漂移 */
+let aboutGlowLastPointerActivityMs = 0
+const ABOUT_GLOW_POINTER_SILENCE_MS = 420
+
+let aboutGlowIdleRafId: number | null = null
+
+function stopAboutGlowIdleLoop() {
+  if (aboutGlowIdleRafId != null && typeof cancelAnimationFrame !== 'undefined') {
+    cancelAnimationFrame(aboutGlowIdleRafId)
+    aboutGlowIdleRafId = null
+  }
+}
+
+function clampAboutGlowGlobal(n: number): number {
+  return Math.min(100, Math.max(0, n))
+}
+
+function tickAboutGlowIdleDrift(now: number) {
+  const t = now * 0.000135
+  const targetX =
+    50 + 11 * Math.sin(t * 0.71 + 0.15) + 6 * Math.sin(t * 1.29 + 0.92) + 3 * Math.sin(t * 2.07 + 1.8)
+  const targetY =
+    48 + 9 * Math.cos(t * 0.63 + 0.48) + 5 * Math.sin(t * 1.14 + 1.97) + 3.5 * Math.cos(t * 1.93 + 0.31)
+  aboutGlowGlobalX.value = clampAboutGlowGlobal(
+    aboutGlowGlobalX.value + (targetX - aboutGlowGlobalX.value) * 0.056,
+  )
+  aboutGlowGlobalY.value = clampAboutGlowGlobal(
+    aboutGlowGlobalY.value + (targetY - aboutGlowGlobalY.value) * 0.056,
+  )
+}
+
+function aboutGlowIdleFrame(ts: DOMHighResTimeStamp) {
+  aboutGlowIdleRafId = requestAnimationFrame(aboutGlowIdleFrame)
+  if (!heroMotionOk.value) return
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return
+  }
+  const now = typeof performance !== 'undefined' ? performance.now() : ts
+  if (
+    aboutGlowPointerInside.value &&
+    now - aboutGlowLastPointerActivityMs < ABOUT_GLOW_POINTER_SILENCE_MS
+  ) {
+    return
+  }
+  tickAboutGlowIdleDrift(now)
+}
+
+function startAboutGlowIdleLoop() {
+  if (typeof window === 'undefined' || typeof requestAnimationFrame === 'undefined') return
+  stopAboutGlowIdleLoop()
+  aboutGlowIdleRafId = requestAnimationFrame(aboutGlowIdleFrame)
+}
+
+function clampGlowSplitPct(n: number): number {
+  return Math.min(94, Math.max(6, n))
+}
+
+/** 八格：直向以游標 sx 分兩大欄、每欄再均分；橫向 sy 分兩列。換算該欄內高光 0–100％ */
+function columnOctLocalHighlightX(globalXPct: number, splitX: number, band: 0 | 1 | 2 | 3): number {
+  const g = Math.min(100, Math.max(0, globalXPct))
+  const sx = Math.min(100, Math.max(0, splitX))
+  const b0 = 0
+  const b1 = sx * 0.5
+  const b2 = sx
+  const b3 = sx + (100 - sx) * 0.5
+  const b4 = 100
+  const bounds: [number, number, number, number, number] = [b0, b1, b2, b3, b4]
+  const lo = bounds[band]!
+  const hi = bounds[band + 1]!
+  const w = hi - lo
+  if (w <= 1e-6) return 50
+  let v: number
+  if (g <= lo) v = 0
+  else if (g >= hi) v = 100
+  else v = ((g - lo) / w) * 100
+  return Math.round(Math.min(100, Math.max(0, v)) * 100) / 100
+}
+
+const aboutGlowStyle = computed(() => {
+  const gx = aboutGlowGlobalX.value
+  const gy = aboutGlowGlobalY.value
+  const sx = clampGlowSplitPct(gx)
+  const sy = clampGlowSplitPct(gy)
+  const style: Record<string, string> = {
+    '--about-cross-x': `${sx}%`,
+    '--about-cross-y': `${sy}%`,
+  }
+  for (const row of [0, 1] as const) {
+    for (const col of [0, 1, 2, 3] as const) {
+      const lx = columnOctLocalHighlightX(gx, sx, col)
+      style[`--about-glow-r${row}c${col}-x`] = `${lx}%`
+    }
+  }
+  return style
+})
+
+function syncAboutGlowFromPointer(clientX: number, clientY: number) {
+  const el = aboutGlowRef.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  if (r.width <= 0 || r.height <= 0) return
+  const x = Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100))
+  const y = Math.min(100, Math.max(0, ((clientY - r.top) / r.height) * 100))
+  aboutGlowGlobalX.value = x
+  aboutGlowGlobalY.value = y
+}
+
+function bumpAboutGlowPointerActivity() {
+  aboutGlowLastPointerActivityMs =
+    typeof performance !== 'undefined' ? performance.now() : typeof Date !== 'undefined' ? Date.now() : 0
+}
+
+function onAboutGlowPointerMove(e: PointerEvent) {
+  if (!heroMotionOk.value) return
+  aboutGlowPointerInside.value = true
+  bumpAboutGlowPointerActivity()
+  syncAboutGlowFromPointer(e.clientX, e.clientY)
+}
+
+function onAboutGlowPointerEnter(e: PointerEvent) {
+  if (!heroMotionOk.value) return
+  aboutGlowPointerInside.value = true
+  bumpAboutGlowPointerActivity()
+  syncAboutGlowFromPointer(e.clientX, e.clientY)
+}
+
+function onAboutGlowPointerLeave() {
+  aboutGlowPointerInside.value = false
+}
 
 function setLang(l: Lang) {
   lang.value = l
@@ -719,7 +866,7 @@ function scrollToPageTop() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img class="brand__logo" src="/CET.png" width="520" height="120" :alt="txt.siteName" />
+          <img class="brand__logo" src="/fvl_logo.png" width="520" height="120" :alt="txt.siteName" />
           <span class="brand__tag">{{ txt.siteTagline }}</span>
         </a>
 
@@ -775,7 +922,20 @@ function scrollToPageTop() {
         @mousemove="onHeroStripePointerMove"
         @mouseleave="onHeroStripeMouseLeave"
       >
+        <div v-if="HERO_BACKGROUND_PHOTO" class="hero__photo" aria-hidden="true">
+          <img
+            :src="HERO_BANNER_PHOTO_SRC"
+            alt=""
+            class="hero__photo-img"
+            width="1200"
+            height="756"
+            decoding="async"
+            loading="eager"
+            fetchpriority="high"
+          />
+        </div>
         <canvas
+          v-else
           id="hero-gradient-canvas"
           class="hero__canvas"
           data-transition-in
@@ -783,22 +943,37 @@ function scrollToPageTop() {
         />
         <div class="hero__scrim" aria-hidden="true" />
         <div class="hero__backdrop" aria-hidden="true" />
-        <div class="hero__wave" aria-hidden="true">
+        <div v-if="SHOW_HERO_WAVE" class="hero__wave" aria-hidden="true">
           <svg
             class="hero__wave-svg"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 1440 64"
             preserveAspectRatio="none"
           >
+            <defs>
+              <linearGradient
+                id="hero-wave-grad"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="0%"
+              >
+                <stop offset="0%" stop-color="#162d7a" />
+                <stop offset="38%" stop-color="#2a52c4" />
+                <stop offset="52%" stop-color="#5b9fd4" />
+                <stop offset="100%" stop-color="#e8b84a" />
+              </linearGradient>
+            </defs>
             <path
               class="hero__wave-path"
+              fill="url(#hero-wave-grad)"
               d="M0,34 C240,62 380,14 620,38 C760,54 940,22 1120,40 C1260,52 1380,18 1440,30 L1440,64 L0,64 Z"
             />
           </svg>
         </div>
         <div class="hero__inner">
-          <p class="kickerhero__">{{ txt.hero.kicker }}</p>
-          <h1 class="hero__title">
+          <!-- <p class="hero__kicker">{{ txt.hero.kicker }}</p> -->
+          <!-- <h1 class="hero__title">
             <span
               ref="heroTitleFontWeightRef"
               class="hero__title-main"
@@ -809,43 +984,65 @@ function scrollToPageTop() {
               class="hero__title-stack"
               :class="{ 'hero__title-stack--ascii': lang === 'en' }"
             >{{ txt.hero.subtitle }}</span>
-          </h1>
+          </h1> -->
           <button type="button" class="btn btn--ghost" @click="scrollToSection('schedule')">
             {{ txt.hero.cta }}
           </button>
         </div>
       </section>
 
-      <section id="about" class="section section--about-grad section--about-after-hero">
-        <div class="section__inner">
-          <div
-            ref="aboutCardRef"
-            class="about-card"
-            :class="{ 'about-card--visible': aboutCardVisible }"
-          >
-            <div class="about-card__inner">
-              <div class="about-card__head">
-                <h2 class="section__title about-card__title">{{ txt.about.title }}</h2>
-                <a
-                  class="about-card__more"
-                  :href="txt.about.officialAboutUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  :aria-label="txt.about.officialAboutAria"
-                >
-                  {{ txt.about.moreLabel }}
-                </a>
-              </div>
-              <div class="prose about-card__prose">
-                <p
-                  v-for="(para, i) in txt.about.body.split('\n\n')"
-                  :key="i"
-                  class="about-card__para"
-                >
-                  {{ para }}
-                </p>
-              </div>
-            </div>
+      <section
+        ref="aboutGlowRef"
+        class="about-glow"
+        :aria-label="txt.aboutGlow.ariaLabel"
+        :style="aboutGlowStyle"
+        @pointermove="onAboutGlowPointerMove"
+        @pointerdown="onAboutGlowPointerMove"
+        @pointerenter="onAboutGlowPointerEnter"
+        @pointerleave="onAboutGlowPointerLeave"
+      >
+        <div class="about-glow__viewport" aria-hidden="true">
+          <div class="about-glow__cells">
+            <div class="about-glow__cell about-glow__cell--r0c0" />
+            <div class="about-glow__cell about-glow__cell--r0c1" />
+            <div class="about-glow__cell about-glow__cell--r0c2" />
+            <div class="about-glow__cell about-glow__cell--r0c3" />
+            <div class="about-glow__cell about-glow__cell--r1c0" />
+            <div class="about-glow__cell about-glow__cell--r1c1" />
+            <div class="about-glow__cell about-glow__cell--r1c2" />
+            <div class="about-glow__cell about-glow__cell--r1c3" />
+          </div>
+          <div class="about-glow__cross">
+            <span class="about-glow__cross-line about-glow__cross-line--v about-glow__cross-line--v1" />
+            <span class="about-glow__cross-line about-glow__cross-line--v about-glow__cross-line--v2" />
+            <span class="about-glow__cross-line about-glow__cross-line--v about-glow__cross-line--v3" />
+            <span class="about-glow__cross-line about-glow__cross-line--h" />
+          </div>
+        </div>
+      </section>
+
+      <section id="about" class="section section--about">
+        <div class="section__inner section__inner--about">
+          <div class="about-block__head">
+            <h2 class="section__title about-block__title">{{ txt.about.title }}</h2>
+            <a
+              class="about-block__more"
+              :href="txt.about.officialAboutUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              :aria-label="txt.about.officialAboutAria"
+            >
+              {{ txt.about.moreLabel }}
+            </a>
+          </div>
+          <div class="prose about-block__prose">
+            <p
+              v-for="(para, i) in txt.about.body.split('\n\n')"
+              :key="i"
+              class="about-block__para"
+            >
+              {{ para }}
+            </p>
           </div>
         </div>
       </section>
@@ -965,17 +1162,29 @@ function scrollToPageTop() {
         />
         <div class="works-board__scrim" aria-hidden="true" />
         <div class="works-board__backdrop" aria-hidden="true" />
-        <div class="section__inner section__inner--works">
-          <header class="works-board__heading">
-            <h2 id="works-board-heading" class="works-board__title">{{ txt.works.title }}</h2>
-            <button
-              v-if="heroMotionOk"
-              type="button"
-              class="works-marquee-toggle"
-              :aria-pressed="worksMarqueePaused"
-              :aria-label="worksMarqueePaused ? txt.works.marqueePlayAria : txt.works.marqueePauseAria"
-              @click="toggleWorksMarqueePause"
-            >
+        <div
+          class="works-board__drag"
+          :class="{ 'works-board__drag--dragging': worksDragging }"
+          @pointerdown="onWorksMarqueePointerDown"
+          @pointermove="onWorksMarqueePointerMove"
+          @pointerup="onWorksMarqueePointerUp"
+          @pointercancel="onWorksMarqueePointerCancel"
+          @lostpointercapture="onWorksMarqueeLostPointerCapture"
+        >
+          <div class="section__inner section__inner--works">
+            <header class="works-board__heading">
+              <h2 id="works-board-heading" class="works-board__title">{{ txt.works.title }}</h2>
+              <button
+                v-if="heroMotionOk"
+                type="button"
+                class="works-marquee-toggle"
+                :aria-pressed="worksMarqueePaused"
+                :aria-label="
+                  worksMarqueePaused ? txt.works.marqueePlayAria : txt.works.marqueePauseAria
+                "
+                @click="toggleWorksMarqueePause"
+                @pointerdown.stop
+              >
               <span class="works-marquee-toggle__icon" aria-hidden="true">
                 <svg
                   v-if="!worksMarqueePaused"
@@ -1014,17 +1223,11 @@ function scrollToPageTop() {
           <div class="works-marquee">
             <div
               class="works-marquee__track"
-              :class="{ 'works-marquee__track--dragging': worksDragging }"
               :style="{ transform: `translate3d(${worksOffsetPx}px,0,0)` }"
-              @pointerdown="onWorksMarqueePointerDown"
-              @pointermove="onWorksMarqueePointerMove"
-              @pointerup="onWorksMarqueePointerUp"
-              @pointercancel="onWorksMarqueePointerCancel"
-              @lostpointercapture="onWorksMarqueeLostPointerCapture"
             >
               <div ref="worksSegmentRef" class="works-marquee__segment">
                 <article
-                  v-for="(card, i) in txt.works.cards"
+                  v-for="(card, i) in worksCards"
                   :key="`w-a-${i}`"
                   class="work-card work-card--marquee"
                   role="button"
@@ -1040,6 +1243,7 @@ function scrollToPageTop() {
                       :src="card.image"
                       :alt="card.title"
                       class="work-card__img"
+                      draggable="false"
                       loading="lazy"
                       decoding="async"
                     />
@@ -1049,13 +1253,13 @@ function scrollToPageTop() {
                       <h3 class="work-card__name">{{ card.title }}</h3>
                       <span class="work-card__accent" aria-hidden="true">+</span>
                     </div>
-                    <p class="work-card__text">{{ card.body }}</p>
+                    <p class="work-card__text">{{ workCardMarqueeText(card) }}</p>
                   </div>
                 </article>
               </div>
               <div class="works-marquee__segment" aria-hidden="true">
                 <article
-                  v-for="(card, i) in txt.works.cards"
+                  v-for="(card, i) in worksCards"
                   :key="`w-b-${i}`"
                   class="work-card work-card--marquee"
                   tabindex="-1"
@@ -1067,6 +1271,7 @@ function scrollToPageTop() {
                       :src="card.image"
                       :alt="card.title"
                       class="work-card__img"
+                      draggable="false"
                       loading="lazy"
                       decoding="async"
                     />
@@ -1076,12 +1281,13 @@ function scrollToPageTop() {
                       <h3 class="work-card__name">{{ card.title }}</h3>
                       <span class="work-card__accent" aria-hidden="true">+</span>
                     </div>
-                    <p class="work-card__text">{{ card.body }}</p>
+                    <p class="work-card__text">{{ workCardMarqueeText(card) }}</p>
                   </div>
                 </article>
               </div>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -1114,22 +1320,18 @@ function scrollToPageTop() {
     </footer>
 
     <aside class="social-rail" :aria-label="txt.social.railAria">
-      <div class="social-rail__icons">
+      <div class="social-rail__pill">
         <a
           class="social-rail__link"
-          :href="txt.social.urls.facebook"
+          :href="txt.social.urls.youtube"
           target="_blank"
           rel="noopener noreferrer"
-          :aria-label="txt.social.facebook"
+          :aria-label="txt.social.youtube"
         >
-          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <svg class="social-rail__icon social-rail__icon--fill" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"
+              fill="currentColor"
+              d="M23 7.5c0-1.4-.3-2.5-.9-3.4-.7-1-1.7-1.5-3.1-1.8C16.2 2 12 2 12 2s-4.2 0-7 .3c-1.4.3-2.4.9-3.1 1.8C1.3 5 1 6.1 1 7.5v9c0 1.4.3 2.5.9 3.4.7 1 1.8 1.6 3.1 1.8 2.8.3 7 .3 7 .3s4.2 0 7-.3c1.4-.2 2.4-.8 3.1-1.8.6-.9.9-2 .9-3.4v-9zM10 15.5v-7l6 3.5-6 3.5z"
             />
           </svg>
         </a>
@@ -1140,7 +1342,7 @@ function scrollToPageTop() {
           rel="noopener noreferrer"
           :aria-label="txt.social.instagram"
         >
-          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <svg class="social-rail__icon social-rail__icon--stroke" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
               fill="none"
               stroke="currentColor"
@@ -1153,48 +1355,38 @@ function scrollToPageTop() {
         </a>
         <a
           class="social-rail__link"
-          :href="txt.social.urls.threads"
+          :href="txt.social.urls.facebook"
           target="_blank"
           rel="noopener noreferrer"
-          :aria-label="txt.social.threads"
+          :aria-label="txt.social.facebook"
         >
-          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <svg class="social-rail__icon social-rail__icon--stroke" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
               fill="none"
               stroke="currentColor"
               stroke-width="1.75"
               stroke-linecap="round"
-              d="M9.2 7.3c1.8-1.1 4.1-.9 5.7.5 1.4 1.2 1.8 3.1 1 4.8-.9 1.8-2.9 2.7-5.3 2.1"
-            />
-            <path
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linecap="round"
-              d="M7 17.2c2.1 1.1 4.8.5 6.4-1.4 1.7-2 1.9-4.7.4-6.8"
+              stroke-linejoin="round"
+              d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"
             />
           </svg>
         </a>
+
+        <hr class="social-rail__rule" />
+
+        <p class="social-rail__follow" :class="{ 'social-rail__follow--caps': lang === 'en' }">
+          {{ txt.social.followLabel }}
+        </p>
+      </div>
+
+      <div class="social-rail__extras">
         <a
-          class="social-rail__link"
-          :href="txt.social.urls.youtube"
-          target="_blank"
-          rel="noopener noreferrer"
-          :aria-label="txt.social.youtube"
-        >
-          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path
-              fill="currentColor"
-              d="M23 7.5c0-1.4-.3-2.5-.9-3.4-.7-1-1.7-1.5-3.1-1.8C16.2 2 12 2 12 2s-4.2 0-7 .3c-1.4.3-2.4.9-3.1 1.8C1.3 5 1 6.1 1 7.5v9c0 1.4.3 2.5.9 3.4.7 1 1.8 1.6 3.1 1.8 2.8.3 7 .3 7 .3s4.2 0 7-.3c1.4-.2 2.4-.8 3.1-1.8.6-.9.9-2 .9-3.4v-9zM10 15.5v-7l6 3.5-6 3.5z"
-            />
-          </svg>
-        </a>
-        <a
-          class="social-rail__link social-rail__link--mail"
+          class="social-rail__link social-rail__link--minimal"
           :href="txt.social.urls.email"
           :aria-label="txt.social.email"
+          :title="txt.social.email"
         >
-          <svg class="social-rail__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <svg class="social-rail__icon social-rail__icon--stroke social-rail__icon--sm" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="none"
               stroke="currentColor"
@@ -1205,24 +1397,25 @@ function scrollToPageTop() {
             />
           </svg>
         </a>
+
+        <button
+          type="button"
+          class="social-rail__top"
+          :aria-label="txt.social.backToTop"
+          @click="scrollToPageTop"
+        >
+          <svg class="social-rail__top-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 19V5m0 0-7 7m7-7 7 7"
+            />
+          </svg>
+        </button>
       </div>
-      <button
-        type="button"
-        class="social-rail__top"
-        :aria-label="txt.social.backToTop"
-        @click="scrollToPageTop"
-      >
-        <svg class="social-rail__top-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M12 19V5m0 0-7 7m7-7 7 7"
-          />
-        </svg>
-      </button>
     </aside>
 
     <Teleport to="body">
@@ -1341,32 +1534,66 @@ function scrollToPageTop() {
 }
 
 :root {
-  /** 關於我們外層：上淺橘 → 下白（上至下） */
-  --about-grad-peach: #ffefe4;
-  --about-grad-white: #ffffff;
-  --ink: #14121a;
-  --ink-soft: #2a2633;
-  --paper: #f6f4ef;
-  --paper-tint: #ebe6dc;
-  /** 主區米色漸層（雙色：亮底 → 明顯深一階的沙棕） */
-  --page-bg-from: #fcf9f5;
-  --page-bg-to: #dac9b4;
-  /** 淺色銜接色：場次底／地圖頂、作品區等 */
-  --schedule-map-seam: #fffdf9;
-  /** 地圖區 aboutus.jpeg 上方的淺色罩（數字愈小照片愈清楚） */
-  --map-bg-scrim-alpha: 0.62;
-  --accent: #b8860b;
-  --accent-soft: rgba(184, 134, 11, 0.12);
-  --line: rgba(20, 18, 26, 0.12);
-  /** 場次／入場／關於／作品／地圖 等區塊主標題（赭紅） */
-  --section-heading-terracotta: #d14d33;
-  /** Stripe WebGL 四角色（首屏、footer、作品區 canvas 共用） */
-  --stripe-gradient-color-1: #fff8e5;
-  --stripe-gradient-color-2: #ffab1a;
-  --stripe-gradient-color-3: #f0f4be;
-  --stripe-gradient-color-4: #ffc88a;
+  color-scheme: dark;
+  /** 主視覺四色：靛藍 → 陶土橘 → 暖金（降低霓虹感、漸層更柔和） */
+  --palette-blue: #1b2f9e;
+  --palette-blue-dim: #0e1a5c;
+  --palette-orange: #d97b4a;
+  --palette-yellow: #e8b84a;
+  --blue-rgb: 27 47 158;
+  --orange-rgb: 217 123 74;
+  --yellow-rgb: 232 184 74;
+  /** 場次區由上往下漸層：靛藍 → 天青 → 暖金 */
+  --schedule-grad-from: #162d7a;
+  --schedule-grad-mid: #4a7fd4;
+  --schedule-grad-to: #e0b44a;
+  --ink: #f0f4fc;
+  --ink-soft: #a8b8e8;
+  /** 區塊打底 */
+  --paper: #152470;
+  --paper-tint: #1e2f8a;
+  /** 淺底內文、圖標用深藍 */
+  --text-on-light: #111b45;
+  /** 深色底上做亮色按鈕時用的字／圖標色 */
+  --on-accent: #0e1a52;
+  /** 頁面主漸層 */
+  --page-bg-from: #121f66;
+  --page-bg-to: #c46940;
+  --schedule-map-seam: #1a3278;
+  /** 地圖區照片上的罩（請搭配 ::after alpha） */
+  --map-bg-scrim-alpha: 0.55;
+  --map-corner-text: #eef2ff;
+  /** 次要操作底上的字形 */
+  --social-alt-fg: #e8eeff;
+  --social-alt-bg: rgb(var(--blue-rgb) / 0.88);
+  --accent: #e8c04a;
+  --accent-soft: rgb(var(--yellow-rgb) / 0.22);
+  --line: rgba(255, 255, 255, 0.18);
+  /** 區塊／頁面主標題字色（暖白） */
+  --section-heading-terracotta: #faf6ee;
+  /** Stripe／WebGL */
+  --stripe-gradient-color-1: #1b2f9e;
+  --stripe-gradient-color-2: #d97b4a;
+  --stripe-gradient-color-3: #e8b84a;
+  --stripe-gradient-color-4: #0e1a5c;
   --font-display: 'Playfair Display', 'Noto Sans TC', serif;
   --font-body: 'Noto Sans TC', 'DM Sans', system-ui, sans-serif;
+  /** 社群直欄 */
+  --social-rail-pill: #1a2a7a;
+  --social-rail-icon: #dce4ff;
+  --social-rail-icon-hover: #ffffff;
+  /** 較深藍面板 */
+  --surface-raised: #243580;
+  --surface-muted: rgb(var(--blue-rgb) / 0.45);
+  /** 淺色內容區（關於、場次卡、入場須知） */
+  --surface-light: #faf8f4;
+  --surface-light-hover: #fffdf8;
+  --text-on-surface: #1a1f3d;
+  /**
+   * 導覽 scrollIntoView／錨點滾動時預留白：sticky header 高度＋微量呼吸空間，
+   * 搭配 safe-area 避免主標題「切」在選單下緣。
+   */
+  --nav-anchor-offset: max(5rem, calc(4.35rem + env(safe-area-inset-top, 0px)));
 }
 
 html {
@@ -1382,8 +1609,9 @@ body {
   color: var(--ink);
   background-color: var(--page-bg-from);
   background-image: linear-gradient(
-    158deg,
+    155deg,
     var(--page-bg-from) 0%,
+    color-mix(in srgb, var(--page-bg-from) 52%, var(--page-bg-to)) 45%,
     var(--page-bg-to) 100%
   );
   background-repeat: no-repeat;
@@ -1405,7 +1633,7 @@ a {
 }
 
 a:hover {
-  color: var(--ink);
+  color: #fff;
 }
 
 .page {
@@ -1414,18 +1642,24 @@ a:hover {
   flex-direction: column;
 }
 
-/* Fixed right social rail */
+/** 導覽 scrollIntoView 時留白，避免區塊主標題被 sticky header 切掉 */
+.page main > section[id] {
+  scroll-margin-top: var(--nav-anchor-offset);
+}
+
+/* Fixed right social rail — orange pill + extras */
 .social-rail {
   position: fixed;
   z-index: 38;
-  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  right: max(0.6rem, env(safe-area-inset-right, 0px));
   top: 0;
   bottom: 0;
-  width: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: max(4.75rem, env(safe-area-inset-top));
+  justify-content: center;
+  gap: 0.75rem;
+  padding-top: max(4.5rem, env(safe-area-inset-top));
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   box-sizing: border-box;
   pointer-events: none;
@@ -1435,45 +1669,104 @@ a:hover {
   pointer-events: auto;
 }
 
-.social-rail__icons {
-  flex: 1;
+.social-rail__pill {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  min-height: 0;
+  gap: 1rem;
+  padding: 1.45rem 0.55rem 1.55rem;
+  min-width: 3.25rem;
+  max-width: 3.6rem;
+  background: var(--social-rail-pill);
+  border-radius: 999px;
+  box-shadow: 0 12px 40px rgb(var(--blue-rgb) / 0.35);
 }
 
 .social-rail__link {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   margin: 0;
   padding: 0;
-  color: var(--ink);
+  color: var(--social-rail-icon);
   text-decoration: none;
-  border-radius: 10px;
+  border-radius: 50%;
   background: transparent;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: color 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
 .social-rail__link:hover {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--social-rail-icon-hover);
+  transform: scale(1.06);
 }
 
 .social-rail__link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid #fff;
   outline-offset: 2px;
 }
 
 .social-rail__icon {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   display: block;
+}
+
+.social-rail__icon--sm {
+  width: 21px;
+  height: 21px;
+}
+
+.social-rail__rule {
+  width: 46%;
+  min-width: 1.65rem;
+  height: 1px;
+  margin: 0.2rem auto;
+  padding: 0;
+  border: none;
+  background: rgba(232, 228, 255, 0.12);
+}
+
+.social-rail__follow {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--social-rail-icon);
+  letter-spacing: 0.06em;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.social-rail__follow--caps {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.social-rail__extras {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.social-rail__link--minimal {
+  width: 38px;
+  height: 38px;
+  color: var(--social-alt-fg);
+  background: var(--social-alt-bg);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgb(var(--blue-rgb) / 0.35);
+}
+
+.social-rail__link--minimal:hover {
+  color: #fff;
+  background: rgb(var(--blue-rgb) / 0.93);
+  transform: translateY(-1px) scale(1.03);
 }
 
 .social-rail__top {
@@ -1486,15 +1779,18 @@ a:hover {
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 50%;
   cursor: pointer;
-  color: var(--paper);
-  background: var(--ink);
+  color: var(--social-alt-fg);
+  background: var(--social-alt-bg);
+  box-shadow: 0 8px 22px rgb(var(--blue-rgb) / 0.35);
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .social-rail__top:hover {
-  background: var(--ink-soft);
+  background: rgb(var(--blue-rgb) / 0.94);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .social-rail__top:focus-visible {
@@ -1515,22 +1811,33 @@ a:hover {
 }
 
 @media (max-width: 480px) {
-  .social-rail__link,
-  .social-rail__top {
-    width: 38px;
-    height: 38px;
+  .social-rail__pill {
+    padding: 1.15rem 0.45rem 1.25rem;
+    gap: 0.78rem;
+  }
+
+  .social-rail__link {
+    width: 36px;
+    height: 36px;
   }
 
   .social-rail__icon {
-    width: 32px;
-    height: 32px;
+    width: 23px;
+    height: 23px;
   }
 
-  .social-rail__icons {
-    gap: 0.55rem;
+  .social-rail__follow {
+    font-size: 0.62rem;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .social-rail__link:hover,
+  .social-rail__link--minimal:hover,
+  .social-rail__top:hover {
+    transform: none;
+  }
+}
 .footer__canvas#gradient-canvas {
   position: absolute;
   inset: 0;
@@ -1550,7 +1857,7 @@ a:hover {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: rgba(255, 255, 254, 0.78);
+  background: rgb(var(--blue-rgb) / 0.4);
 }
 
 .footer__inner {
@@ -1563,13 +1870,10 @@ a:hover {
   position: sticky;
   top: 0;
   z-index: 40;
-  background: linear-gradient(
-    158deg,
-    rgba(252, 249, 245, 0.86),
-    rgba(218, 201, 180, 0.86)
-  );
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--palette-blue-dim) 88%, #000);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .header__inner {
@@ -1705,8 +2009,8 @@ a:hover {
 }
 
 .nav__link:hover {
-  color: var(--ink);
-  background: var(--accent-soft);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .nav__link:focus-visible {
@@ -1720,7 +2024,7 @@ a:hover {
   border: 1px solid var(--line);
   border-radius: 999px;
   overflow: hidden;
-  background: #fff;
+  background: var(--paper-tint);
 }
 
 .lang__btn {
@@ -1737,13 +2041,19 @@ a:hover {
 }
 
 .lang__btn:hover {
-  color: var(--ink);
-  background: var(--paper-tint);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .lang__btn--active {
-  background: var(--ink);
+  background: #fff;
   color: var(--paper);
+  box-shadow: inset 0 0 0 1px rgba(232, 228, 255, 0.35);
+}
+
+.lang__btn--active:hover {
+  color: var(--paper);
+  background: #ebebf5;
 }
 
 .lang__btn:focus-visible {
@@ -1790,14 +2100,11 @@ a:hover {
     gap: 0;
     padding: 0.6rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
     margin: 0;
-    background: linear-gradient(
-      158deg,
-      rgba(252, 249, 245, 0.98),
-      rgba(218, 201, 180, 0.98)
-    );
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--line);
-    box-shadow: 0 10px 28px rgba(20, 18, 26, 0.06);
+    background: #000;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: none;
+    box-shadow: none;
     display: none;
     z-index: 50;
   }
@@ -1856,7 +2163,7 @@ a:hover {
   }
 }
 
-/* Hero — Stripe WebGL 全幅動態底 + 底部波浪（遮罩下方較透以保留動態感） */
+/* Hero — WebGL Stripe 或全幅照片底 + 可選底部波浪；scrim 壓在底圖上供 CTA 可讀 */
 .hero {
   position: relative;
   isolation: isolate;
@@ -1870,7 +2177,23 @@ a:hover {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  background: #fafaf9;
+  background: var(--paper);
+}
+
+.hero__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hero__photo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .hero__canvas {
@@ -1892,12 +2215,12 @@ a:hover {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  /** 由上略罩、接近底部逐漸變淡，Stripe 動態在 Banner 中下段仍清楚可見 */
+  /** 與主視覺：靛藍→陶土橘→暖金（柔和過渡） */
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 254, 0.8) 0%,
-    rgba(255, 255, 254, 0.62) min(52%, calc(100% - 160px)),
-    rgba(255, 255, 254, 0.28) 100%
+    rgb(var(--blue-rgb) / 0.45) 0%,
+    rgb(var(--orange-rgb) / 0.2) min(52%, calc(100% - 160px)),
+    rgb(var(--yellow-rgb) / 0.1) 100%
   );
 }
 
@@ -1912,15 +2235,17 @@ a:hover {
   background-size: 140px 140px;
 }
 
-/** 疊在首屏 Stripe 之上，頂側透明處仍可見 Banner 底 */
+/** 疊在首屏 Stripe 之上，頂側透明處仍可見 Banner 底；輕 blur 柔化波浪邊緣 */
 .hero__wave {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: -4%;
+  right: -4%;
+  bottom: -6px;
   z-index: 4;
   line-height: 0;
   pointer-events: none;
+  filter: blur(3px);
+  -webkit-filter: blur(3px);
 }
 
 .hero__wave-svg {
@@ -1928,11 +2253,7 @@ a:hover {
   width: 100%;
   height: clamp(52px, 10vw, 92px);
   vertical-align: top;
-  opacity: 0.88;
-}
-
-.hero__wave-path {
-  fill: var(--about-grad-peach);
+  opacity: 0.97;
 }
 
 .hero__inner {
@@ -1944,7 +2265,9 @@ a:hover {
   padding: clamp(3.75rem, 10svh, 5.5rem) 1.25rem clamp(3.5rem, 8svh, 5rem);
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
+  text-align: center;
   flex: 1;
 }
 
@@ -1965,13 +2288,16 @@ a:hover {
   font-weight: 500;
   font-size: clamp(2.75rem, 7vw, 4.25rem);
   line-height: 1.08;
-  margin: 0 0 1.25rem;
-  max-width: 12ch;
+  margin: 0 auto 1.25rem;
+  max-width: 18ch;
+  text-align: center;
+  color: #fff;
 }
 
 .hero .btn--ghost {
   position: relative;
   z-index: 1;
+  align-self: center;
 }
 
 .hero__title-main {
@@ -1998,7 +2324,7 @@ a:hover {
   font-weight: 400;
   letter-spacing: 0.06em;
   margin-top: 0.35em;
-  color: var(--ink-soft);
+  color: #fff;
 }
 
 .hero__title-stack--ascii {
@@ -2029,10 +2355,11 @@ a:hover {
 }
 
 .btn--ghost:hover {
-  background: var(--ink);
+  background: #fff;
   color: var(--paper);
+  border-color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(20, 18, 26, 0.12);
+  box-shadow: 0 8px 28px rgb(var(--blue-rgb) / 0.3);
 }
 
 .btn:focus-visible {
@@ -2045,10 +2372,10 @@ a:hover {
   padding: 4rem 1.25rem;
 }
 
-/** 入場須知：白底黑字／分頁切換／外框內容區＋單條字卡 */
+/** 入場須知：黑底、白底黑字字卡 */
 .section--admission-panel {
   position: relative;
-  background-color: #ffffff;
+  background-color: #000;
 }
 
 .section--admission-panel > .section__inner {
@@ -2056,16 +2383,17 @@ a:hover {
 }
 
 .admission-panel__title {
-  margin: 0 0 1.35rem;
+  margin: 0 auto 1.35rem;
   font-family: var(--font-body);
   font-weight: 700;
   font-size: clamp(1.65rem, 4vw, 2.25rem);
   line-height: 1.18;
   color: var(--section-heading-terracotta);
   padding-bottom: 0.42rem;
-  border-bottom: 1px solid rgba(209, 77, 51, 0.38);
-  width: fit-content;
+  border-bottom: 1px solid rgb(var(--yellow-rgb) / 0.28);
+  width: 100%;
   max-width: 100%;
+  text-align: center;
 }
 
 .admission-panel__tabs {
@@ -2073,6 +2401,7 @@ a:hover {
   flex-wrap: wrap;
   gap: 0.65rem 0.75rem;
   margin-bottom: 1rem;
+  justify-content: center;
 }
 
 /** 僅以下兩顆為入場須知分頁（非導覽／語言切換按鈕） */
@@ -2091,8 +2420,10 @@ a:hover {
   border-radius: 4px;
   box-shadow: none;
   appearance: none;
-  text-align: left;
-  transition: background-color 0.18s ease;
+  text-align: center;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .admission-panel__tab:focus-visible {
@@ -2101,11 +2432,18 @@ a:hover {
 }
 
 .admission-panel__tab[aria-selected='true'] {
-  background: var(--accent-soft);
+  background: #fff;
+  color: var(--paper);
 }
 
 .admission-panel__tab:hover {
-  background: var(--about-grad-peach);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.admission-panel__tab[aria-selected='true']:hover {
+  color: var(--paper);
+  background: #ebebf5;
 }
 
 .admission-panel-fade-enter-active,
@@ -2121,10 +2459,10 @@ a:hover {
 .admission-panel__frame {
   margin: 0;
   padding: clamp(1rem, 2.8vw, 1.35rem);
-  /* border: 1px solid var(--ink); */
   border-radius: 14px;
-  background:#ffedde;
-  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.04);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .admission-panel__list {
@@ -2143,19 +2481,19 @@ a:hover {
   align-items: start;
   margin: 0;
   padding: 1rem 1.15rem;
-  background: #ffffff;
-  border: 1px solid var(--line);
+  background: var(--surface-light);
+  border: 1px solid rgb(var(--blue-rgb) / 0.12);
   border-radius: 12px;
   box-shadow:
-    0 1px 0 rgba(20, 18, 26, 0.04),
-    0 6px 20px rgba(20, 18, 26, 0.05);
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 6px 22px rgb(var(--blue-rgb) / 0.1);
 }
 
 .admission-panel__num {
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 600;
-  color: #df8f8f;
+  color: var(--text-on-surface);
   line-height: 1;
   padding-top: 0.06em;
   flex-shrink: 0;
@@ -2167,237 +2505,440 @@ a:hover {
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.65;
-  color: var(--ink);
+  color: var(--text-on-surface);
 }
 
-/** 關於我們：上淺橘至下白（垂直漸層，由上到下） */
-.section--about-grad {
-  background: linear-gradient(to bottom, var(--about-grad-peach), var(--about-grad-white));
+@keyframes about-glow-cell-flow {
+  0% {
+    background-position: 2% 50%;
+  }
+
+  100% {
+    background-position: 64% 50%;
+  }
 }
 
-/** Banner 結束無縫接續波浪底，略上押避免透出頁面色 */
-.section--about-after-hero {
-  margin-top: -4px;
-}
-
-.about-card {
+/** 「關於我們」上方：八格；直向分界隨游標 sx（sx/2、sx、(sx+100%)/2），橫向 sy；共用流動漸層 */
+.about-glow {
+  --about-glow-h: clamp(168px, 26vmin, 300px);
+  /** 八格共用底色漸層橫向流動周期 */
+  --about-glow-flow-dur: 18s;
+  --about-cross-x: 50%;
+  --about-cross-y: 48%;
+  --about-glow-r0c0-x: 50%;
+  --about-glow-r0c1-x: 50%;
+  --about-glow-r0c2-x: 50%;
+  --about-glow-r0c3-x: 50%;
+  --about-glow-r1c0-x: 50%;
+  --about-glow-r1c1-x: 50%;
+  --about-glow-r1c2-x: 50%;
+  --about-glow-r1c3-x: 50%;
+  /** 海報橫向漸層：靛藍 → 天青 → 極窄幅淺綠 → 暖金 */
+  --ag-blue-deep: #162d7a;
+  --ag-blue: #2a52c4;
+  --ag-blue-light: #5b9fd4;
+  /** 淺綠僅作青↔金之間的窄過渡 */
+  --ag-green-soft: #b8dcc8;
+  --ag-yellow-bright: #e8b84a;
   position: relative;
-  border-radius: 16px;
-  padding: 2px;
-  background: transparent;
-  box-shadow: none;
-  perspective: 1100px;
+  isolation: isolate;
+  height: var(--about-glow-h);
+  min-height: var(--about-glow-h);
+  margin-top: -4px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  box-sizing: border-box;
+  background: linear-gradient(
+    148deg,
+    var(--ag-blue-deep) 0%,
+    var(--ag-blue) 32%,
+    var(--ag-blue-light) 48%,
+    var(--ag-green-soft) 50.5%,
+    var(--ag-green-soft) 51.5%,
+    var(--ag-yellow-bright) 58%,
+    var(--ag-yellow-bright) 100%
+  );
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--ag-blue-light) 52%, var(--ag-yellow-bright) 48%),
+    inset 0 0 28px color-mix(in srgb, var(--ag-blue) 35%, transparent);
 }
 
-/** 流光邊（僅在非 reduce 且已揭露時由 animation-play-state 驅動） */
-.about-card::before {
+.about-glow__viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.about-glow__cells {
+  position: absolute;
+  inset: 0;
+}
+
+.about-glow__cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.about-glow__cross-line {
+  position: absolute;
+  background: linear-gradient(
+    155deg,
+    var(--ag-blue-deep) 0%,
+    var(--ag-blue) 36%,
+    var(--ag-blue-light) 50%,
+    var(--ag-green-soft) 51.5%,
+    var(--ag-green-soft) 52.3%,
+    var(--ag-yellow-bright) 60%,
+    var(--ag-yellow-bright) 100%
+  );
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--ag-blue-light) 55%, transparent),
+    0 0 22px rgb(var(--yellow-rgb) / 0.58);
+}
+
+.about-glow__cross-line--v {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.about-glow__cross-line--v1 {
+  /** 左半區中線 */
+  left: calc(var(--about-cross-x) * 0.5);
+}
+
+.about-glow__cross-line--v2 {
+  /** 主垂直線（跟游標） */
+  left: var(--about-cross-x);
+}
+
+.about-glow__cross-line--v3 {
+  /** 右半區中線 */
+  left: calc(var(--about-cross-x) + (100% - var(--about-cross-x)) * 0.5);
+}
+
+.about-glow__cross-line--h {
+  left: 0;
+  right: 0;
+  top: var(--about-cross-y);
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.about-glow__cell {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.about-glow__cell::before,
+.about-glow__cell::after {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: 17px;
+  inset: 0;
+  pointer-events: none;
+}
+
+/** 底色：橫向流動（靛藍／天青／極窄淺綠／暖金） */
+.about-glow__cell::before {
   z-index: 0;
-  background: linear-gradient(
-    120deg,
-    var(--about-grad-peach),
-    rgba(255, 174, 90, 0.65),
-    var(--accent),
-    var(--stripe-gradient-color-3),
-    var(--about-grad-peach)
+  background-image: linear-gradient(
+    90deg,
+    var(--ag-blue-deep) 0%,
+    var(--ag-blue) 14%,
+    var(--ag-blue-deep) 26%,
+    var(--ag-blue) 38%,
+    var(--ag-blue-light) 44%,
+    var(--ag-green-soft) 47.5%,
+    var(--ag-green-soft) 48.8%,
+    var(--ag-yellow-bright) 52%,
+    var(--ag-yellow-bright) 60%,
+    var(--ag-blue-light) 66%,
+    var(--ag-green-soft) 67.2%,
+    var(--ag-green-soft) 68%,
+    var(--ag-blue) 74%,
+    var(--ag-blue-deep) 86%,
+    var(--ag-blue) 93%,
+    var(--ag-blue-deep) 100%
   );
-  background-size: 320% 320%;
-  opacity: 0;
-  transition: opacity 0.95s cubic-bezier(0.22, 1, 0.36, 1);
+  background-repeat: no-repeat;
+  background-size: 320% 100%;
+  background-position: 0% 50%;
+  animation-name: about-glow-cell-flow;
+  animation-duration: var(--about-glow-flow-dur);
+  animation-delay: 0s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
 }
 
-.about-card--visible::before {
-  opacity: 0.92;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .about-card--visible::before {
-    animation: about-card-flow 14s linear infinite;
-  }
-
-  .about-card--visible:hover::before {
-    animation-duration: 8s;
-  }
-}
-
-@keyframes about-card-flow {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-.about-card__inner {
-  position: relative;
+/** 游標高光疊在最上 */
+.about-glow__cell::after {
   z-index: 1;
-  background: #ffffff;
-  border-radius: 13px;
-  padding: clamp(1.65rem, 4.2vw, 2.5rem);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow:
-    0 1px 0 rgba(20, 18, 26, 0.04),
-    0 10px 28px rgba(20, 18, 26, 0.06);
-  opacity: 0;
-  transform-origin: 50% 0%;
-  transform: translateY(56px) scale(0.925) rotateX(7deg);
-  transition:
-    opacity 0.88s cubic-bezier(0.18, 1, 0.32, 1),
-    transform 1.05s cubic-bezier(0.18, 1, 0.32, 1),
-    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  background-repeat: no-repeat;
 }
 
-.about-card--visible .about-card__inner {
-  opacity: 1;
-  transform: translateY(0) scale(1) rotateX(0deg);
+.about-glow__cell--r0c0 {
+  left: 0;
+  top: 0;
+  width: calc(var(--about-cross-x) * 0.5);
+  height: var(--about-cross-y);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .about-card--visible:hover .about-card__inner {
-    transform: translateY(-8px) scale(1) rotateX(0deg);
-    box-shadow:
-      0 4px 12px rgba(20, 18, 26, 0.08),
-      0 20px 48px rgba(20, 18, 26, 0.12);
+.about-glow__cell--r0c0::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r0c0-x) - 28%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r0c0-x) - 11%),
+    color-mix(in srgb, var(--ag-yellow-bright) 82%, transparent) var(--about-glow-r0c0-x),
+    color-mix(in srgb, var(--ag-blue) 68%, transparent) calc(var(--about-glow-r0c0-x) + 14%),
+    transparent calc(var(--about-glow-r0c0-x) + 32%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r0c1 {
+  left: calc(var(--about-cross-x) * 0.5);
+  top: 0;
+  width: calc(var(--about-cross-x) * 0.5);
+  height: var(--about-cross-y);
+}
+
+.about-glow__cell--r0c1::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r0c1-x) - 28%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r0c1-x) - 11%),
+    color-mix(in srgb, var(--ag-yellow-bright) 82%, transparent) var(--about-glow-r0c1-x),
+    color-mix(in srgb, var(--ag-blue) 68%, transparent) calc(var(--about-glow-r0c1-x) + 14%),
+    transparent calc(var(--about-glow-r0c1-x) + 32%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r0c2 {
+  left: var(--about-cross-x);
+  top: 0;
+  width: calc((100% - var(--about-cross-x)) * 0.5);
+  height: var(--about-cross-y);
+}
+
+.about-glow__cell--r0c2::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r0c2-x) - 28%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r0c2-x) - 11%),
+    color-mix(in srgb, var(--ag-yellow-bright) 82%, transparent) var(--about-glow-r0c2-x),
+    color-mix(in srgb, var(--ag-blue) 68%, transparent) calc(var(--about-glow-r0c2-x) + 14%),
+    transparent calc(var(--about-glow-r0c2-x) + 32%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r0c3 {
+  left: calc(var(--about-cross-x) + (100% - var(--about-cross-x)) * 0.5);
+  top: 0;
+  width: calc((100% - var(--about-cross-x)) * 0.5);
+  height: var(--about-cross-y);
+}
+
+.about-glow__cell--r0c3::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r0c3-x) - 26%),
+    color-mix(in srgb, var(--ag-blue-light) 80%, transparent) calc(var(--about-glow-r0c3-x) - 9%),
+    color-mix(in srgb, var(--ag-blue) 76%, transparent) var(--about-glow-r0c3-x),
+    color-mix(in srgb, var(--ag-yellow-bright) 68%, transparent) calc(var(--about-glow-r0c3-x) + 16%),
+    transparent calc(var(--about-glow-r0c3-x) + 34%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r1c0 {
+  left: 0;
+  top: var(--about-cross-y);
+  bottom: 0;
+  width: calc(var(--about-cross-x) * 0.5);
+}
+
+.about-glow__cell--r1c0::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r1c0-x) - 27%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r1c0-x) - 10%),
+    color-mix(in srgb, var(--ag-blue) 76%, transparent) var(--about-glow-r1c0-x),
+    color-mix(in srgb, var(--ag-yellow-bright) 62%, transparent) calc(var(--about-glow-r1c0-x) + 15%),
+    transparent calc(var(--about-glow-r1c0-x) + 33%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r1c1 {
+  left: calc(var(--about-cross-x) * 0.5);
+  top: var(--about-cross-y);
+  bottom: 0;
+  width: calc(var(--about-cross-x) * 0.5);
+}
+
+.about-glow__cell--r1c1::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r1c1-x) - 27%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r1c1-x) - 10%),
+    color-mix(in srgb, var(--ag-blue) 76%, transparent) var(--about-glow-r1c1-x),
+    color-mix(in srgb, var(--ag-yellow-bright) 62%, transparent) calc(var(--about-glow-r1c1-x) + 15%),
+    transparent calc(var(--about-glow-r1c1-x) + 33%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r1c2 {
+  left: var(--about-cross-x);
+  top: var(--about-cross-y);
+  bottom: 0;
+  width: calc((100% - var(--about-cross-x)) * 0.5);
+}
+
+.about-glow__cell--r1c2::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r1c2-x) - 27%),
+    color-mix(in srgb, var(--ag-blue-light) 78%, transparent) calc(var(--about-glow-r1c2-x) - 10%),
+    color-mix(in srgb, var(--ag-blue) 76%, transparent) var(--about-glow-r1c2-x),
+    color-mix(in srgb, var(--ag-yellow-bright) 62%, transparent) calc(var(--about-glow-r1c2-x) + 15%),
+    transparent calc(var(--about-glow-r1c2-x) + 33%),
+    transparent 100%
+  );
+}
+
+.about-glow__cell--r1c3 {
+  left: calc(var(--about-cross-x) + (100% - var(--about-cross-x)) * 0.5);
+  top: var(--about-cross-y);
+  bottom: 0;
+  width: calc((100% - var(--about-cross-x)) * 0.5);
+}
+
+.about-glow__cell--r1c3::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent calc(var(--about-glow-r1c3-x) - 29%),
+    color-mix(in srgb, var(--ag-blue) 76%, transparent) calc(var(--about-glow-r1c3-x) - 11%),
+    color-mix(in srgb, var(--ag-yellow-bright) 80%, transparent) var(--about-glow-r1c3-x),
+    color-mix(in srgb, var(--ag-blue-light) 68%, transparent) calc(var(--about-glow-r1c3-x) + 14%),
+    transparent calc(var(--about-glow-r1c3-x) + 36%),
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-glow {
+    cursor: default;
+    touch-action: auto;
+  }
+
+  .about-glow__cell::before {
+    animation: none;
+    background-position: 38% 50%;
   }
 }
 
-.about-card__head {
+/** 關於我們：暖白底＋深靛內文 */
+.section--about {
+  background: var(--surface-light);
+  color: var(--text-on-surface);
+}
+
+.section--about .section__title {
+  color: var(--text-on-light);
+}
+
+.section__inner--about {
+  max-width: 52rem;
+}
+
+.about-block__head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 0.5rem 1.25rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 1.25rem;
+  text-align: center;
 }
 
-.about-card__head .about-card__title {
-  flex: 1;
-  min-width: min(100%, 12rem);
-  margin: 0 0 1rem;
+.about-block__title {
+  margin: 0 0 0.5rem;
+  width: 100%;
 }
 
-.about-card__more {
+.about-block__more {
   flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 0.2rem;
   padding: 0.2rem 0;
   font-family: var(--font-body);
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: var(--accent);
+  color: var(--text-on-light);
   text-decoration: none;
   border: none;
   background: none;
   box-shadow: none;
   cursor: pointer;
   white-space: nowrap;
-  transition:
-    opacity 0.72s cubic-bezier(0.18, 1, 0.32, 1),
-    transform 0.72s cubic-bezier(0.18, 1, 0.32, 1),
-    color 0.2s ease;
+  transition: color 0.2s ease;
 }
 
-.about-card__more:hover {
-  color: var(--ink);
+.about-block__more:hover {
+  color: var(--palette-blue-dim);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.22em;
 }
 
-.about-card__more:focus-visible {
-  outline: 2px solid var(--accent);
+.about-block__more:focus-visible {
+  outline: 2px solid rgb(var(--blue-rgb) / 0.55);
   outline-offset: 3px;
   border-radius: 3px;
 }
 
-.about-card__title,
-.about-card__more,
-.about-card__para {
-  opacity: 0;
-  transform: translateY(32px);
-  transition:
-    opacity 0.72s cubic-bezier(0.18, 1, 0.32, 1),
-    transform 0.82s cubic-bezier(0.18, 1, 0.32, 1);
+.about-block__prose {
+  color: var(--text-on-surface);
 }
 
-.about-card--visible .about-card__title,
-.about-card--visible .about-card__more,
-.about-card--visible .about-card__para {
-  opacity: 1;
-  transform: none;
+.about-block__prose p,
+.about-block__para {
+  margin: 0 0 1.1em;
+  color: var(--text-on-surface);
+  line-height: 1.75;
 }
 
-.about-card--visible .about-card__title {
-  transition-delay: 0.12s;
+.about-block__para:last-child {
+  margin-bottom: 0;
 }
 
-.about-card--visible .about-card__more {
-  transition-delay: 0.18s;
-}
-
-.about-card--visible .about-card__para:nth-child(1) {
-  transition-delay: 0.28s;
-}
-.about-card--visible .about-card__para:nth-child(2) {
-  transition-delay: 0.44s;
-}
-.about-card--visible .about-card__para:nth-child(3) {
-  transition-delay: 0.6s;
-}
-.about-card--visible .about-card__para:nth-child(4) {
-  transition-delay: 0.76s;
-}
-.about-card--visible .about-card__para:nth-child(5) {
-  transition-delay: 0.92s;
-}
-.about-card--visible .about-card__para:nth-child(6) {
-  transition-delay: 1.08s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .about-card::before {
-    animation: none !important;
-    opacity: 0 !important;
-    display: none;
-  }
-
-  .about-card {
-    border: 1px solid var(--line);
-    padding: 0;
-    border-radius: 14px;
-  }
-
-  .about-card__inner {
-    border-radius: 14px;
-    border: none;
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none;
-    box-shadow:
-      0 1px 0 rgba(20, 18, 26, 0.04),
-      0 10px 32px rgba(20, 18, 26, 0.06);
-  }
-
-  .about-card__title,
-  .about-card__more,
-  .about-card__para {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-}
-
-/** 場次表：純白底 */
+/** 場次表：由上往下 藍→青→黃 漸層＋白底字卡 */
 .section--schedule-grad {
-  background-color: #ffffff;
+  background: linear-gradient(
+    to bottom,
+    var(--schedule-grad-from) 0%,
+    color-mix(in srgb, var(--schedule-grad-from) 30%, var(--schedule-grad-mid)) 28%,
+    var(--schedule-grad-mid) 52%,
+    color-mix(in srgb, var(--schedule-grad-mid) 35%, var(--schedule-grad-to)) 78%,
+    var(--schedule-grad-to) 100%
+  );
 }
 
 /** 地圖區：aboutus.jpeg 襯底＋淺色罩以利標題／內容可讀 */
@@ -2425,7 +2966,7 @@ a:hover {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: rgba(255, 253, 249, var(--map-bg-scrim-alpha));
+  background: rgb(var(--blue-rgb) / calc(var(--map-bg-scrim-alpha) * 0.92));
 }
 
 .section--map-grad > .section__inner {
@@ -2442,7 +2983,14 @@ a:hover {
 .section--works-board {
   position: relative;
   isolation: isolate;
-  background: #fafaf9;
+  background: linear-gradient(
+    180deg,
+    var(--palette-blue) 0%,
+    color-mix(in srgb, var(--palette-blue) 35%, var(--palette-orange)) 38%,
+    var(--palette-orange) 72%,
+    color-mix(in srgb, var(--palette-orange) 40%, var(--palette-yellow)) 88%,
+    var(--palette-yellow) 100%
+  );
   overflow: hidden;
   /**
    * hover 陰影最大層約 0 38px 88px blur，底部可見尾很長；供子層 .works-marquee-bleed 繼承。
@@ -2470,7 +3018,7 @@ a:hover {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: rgba(255, 255, 254, 0.78);
+  background: rgb(var(--blue-rgb) / 0.32);
 }
 
 .works-board__backdrop {
@@ -2484,9 +3032,24 @@ a:hover {
   background-size: 140px 140px;
 }
 
-.section--works-board .section__inner--works {
+/** 標題區＋跑馬燈統一為可拖曳手勢區（capture 綁於此層） */
+.works-board__drag {
   position: relative;
   z-index: 3;
+  cursor: grab;
+  touch-action: none;
+}
+
+.works-board__drag:active {
+  cursor: grabbing;
+}
+
+.works-board__drag--dragging {
+  cursor: grabbing;
+}
+
+.section--works-board .section__inner--works {
+  position: relative;
   max-width: 1120px;
 }
 
@@ -2515,24 +3078,27 @@ a:hover {
   padding: 0.45rem 1rem 0.5rem;
   margin: 0;
   border-radius: 999px;
-  border: 1px solid rgba(20, 18, 26, 0.18);
-  background: rgba(255, 255, 254, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgb(var(--blue-rgb) / 0.48);
   color: var(--ink);
   font: inherit;
   font-size: 0.88rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    color 0.2s ease;
 }
 
 .works-marquee-toggle:hover {
-  border-color: rgba(20, 18, 26, 0.35);
-  background: rgba(255, 255, 254, 0.95);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgb(var(--blue-rgb) / 0.62);
 }
 
 .works-marquee-toggle:focus-visible {
@@ -2555,7 +3121,6 @@ a:hover {
 
 .works-marquee-bleed {
   position: relative;
-  z-index: 3;
   width: 100vw;
   max-width: 100vw;
   margin-left: calc(50% - 50vw);
@@ -2579,15 +3144,6 @@ a:hover {
   );
 }
 
-.works-marquee {
-  cursor: grab;
-  touch-action: none;
-}
-
-.works-marquee:active {
-  cursor: grabbing;
-}
-
 .works-marquee__track {
   --works-marquee-gap: 1.5rem;
   display: flex;
@@ -2597,10 +3153,6 @@ a:hover {
   width: max-content;
   will-change: transform;
   user-select: none;
-}
-
-.works-marquee__track--dragging {
-  cursor: grabbing;
 }
 
 .works-marquee__segment {
@@ -2616,6 +3168,10 @@ a:hover {
   cursor: pointer;
 }
 
+.works-board__drag--dragging .work-card--marquee {
+  cursor: grabbing;
+}
+
 .work-card.work-card--marquee:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
@@ -2628,23 +3184,29 @@ a:hover {
 .work-card {
   position: relative;
   isolation: isolate;
-  background: #fff;
+  background: var(--surface-light);
   border-radius: 12px;
-  border: 1px solid rgba(20, 18, 26, 0.08);
-  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.04), 0 12px 40px rgba(20, 18, 26, 0.05);
+  border: 1px solid rgb(var(--blue-rgb) / 0.22);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 6px 24px rgb(var(--blue-rgb) / 0.18);
   /** 陰影畫在圓角外；與 overflow:hidden 同層易在邊緣出現裁切橫線，改由子層裁圖 */
   overflow: visible;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.26s ease, transform 0.26s ease;
+  transition:
+    box-shadow 0.26s ease,
+    transform 0.26s ease,
+    border-color 0.26s ease;
 }
 
 .work-card:hover {
   transform: translateY(-7px) translateZ(0);
   box-shadow:
-    0 4px 12px rgba(20, 18, 26, 0.1),
-    0 18px 40px rgba(20, 18, 26, 0.16),
-    0 38px 88px rgba(20, 18, 26, 0.22);
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 14px 36px rgb(var(--blue-rgb) / 0.22),
+    0 22px 56px rgb(var(--orange-rgb) / 0.14);
+  border-color: rgb(var(--orange-rgb) / 0.45);
 }
 
 .work-card__media {
@@ -2652,8 +3214,8 @@ a:hover {
   min-height: 160px;
   background: linear-gradient(
     145deg,
-    #f0ebe6 0%,
-    #e4dcd4 100%
+    var(--surface-light) 0%,
+    color-mix(in srgb, var(--palette-blue) 5%, var(--surface-light)) 100%
   );
   position: relative;
   border-radius: 11px 11px 0 0;
@@ -2667,23 +3229,30 @@ a:hover {
   display: block;
 }
 
+/** 相片預設可拖曳會搶走跑馬燈手勢；改由外層 article 接住 pointer／tap-to-open */
+.work-card--marquee .work-card__img {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+
 .work-card__body {
   border-radius: 0 0 11px 11px;
-  background: #fff;
+  background: var(--surface-light);
   padding: 1.15rem 1.25rem 1.35rem;
-  text-align: left;
+  text-align: center;
 }
 
 .work-card__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: center;
+  gap: 0.65rem;
   margin-bottom: 0.6rem;
 }
 
 .work-card__name {
-  flex: 1;
+  flex: 0 1 auto;
   margin: 0;
   font-family: var(--font-body);
   font-size: clamp(1rem, 1.85vw, 1.125rem);
@@ -2691,7 +3260,8 @@ a:hover {
   line-height: 1.35;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ink);
+  color: var(--on-accent);
+  text-align: center;
 }
 
 .work-card__accent {
@@ -2699,7 +3269,7 @@ a:hover {
   font-size: 1.45rem;
   font-weight: 300;
   line-height: 1;
-  color: #d43232;
+  color: var(--text-on-light);
   transform: translateY(-1px);
 }
 
@@ -2707,7 +3277,7 @@ a:hover {
   margin: 0;
   font-size: 0.905rem;
   line-height: 1.62;
-  color: #58555f;
+  color: var(--text-on-light);
 }
 
 /** 作品詳情字卡（點擊跑馬燈卡片）：頂欄＋左圖右文，窄螢幕直向堆疊 */
@@ -2720,9 +3290,9 @@ a:hover {
   justify-content: center;
   padding: 1rem;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  background: rgba(20, 18, 26, 0.52);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgb(var(--blue-rgb) / 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .works-detail {
@@ -2732,17 +3302,25 @@ a:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid rgba(20, 18, 26, 0.1);
-  box-shadow: 0 28px 80px rgba(20, 18, 26, 0.22);
+  background: linear-gradient(
+    165deg,
+    var(--surface-light) 0%,
+    color-mix(in srgb, var(--palette-yellow) 8%, var(--surface-light)) 50%,
+    var(--surface-light) 100%
+  );
+  border: 1px solid rgb(var(--blue-rgb) / 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 28px 70px rgb(var(--blue-rgb) / 0.2);
 }
 
 .works-detail__header {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  position: relative;
   gap: 1rem;
   padding: 1.1rem 1.25rem 0.95rem;
   flex-shrink: 0;
@@ -2750,21 +3328,23 @@ a:hover {
 
 .works-detail__heading {
   margin: 0;
+  padding: 0 2.85rem;
   font-family: var(--font-body);
   font-size: clamp(1.1rem, 2.8vw, 1.35rem);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--ink);
+  color: var(--on-accent);
   line-height: 1.35;
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
+  text-align: center;
 }
 
 .works-detail__divider {
   height: 1px;
   margin: 0;
   border: none;
-  background: rgba(20, 18, 26, 0.12);
+  background: rgb(var(--blue-rgb) / 0.14);
   flex-shrink: 0;
 }
 
@@ -2803,7 +3383,12 @@ a:hover {
   aspect-ratio: 1 / 1;
   border-radius: 4px;
   overflow: hidden;
-  background: linear-gradient(145deg, #f0ebe6 0%, #e4dcd4 100%);
+  background: linear-gradient(
+    145deg,
+    var(--palette-blue) 0%,
+    var(--palette-orange) 62%,
+    var(--palette-yellow) 100%
+  );
 }
 
 .works-detail__img {
@@ -2817,10 +3402,19 @@ a:hover {
   width: 100%;
   height: 100%;
   min-height: 10rem;
-  background: linear-gradient(145deg, #f0ebe6 0%, #e4dcd4 100%);
+  background: linear-gradient(
+    145deg,
+    var(--palette-blue) 0%,
+    var(--palette-orange) 62%,
+    var(--palette-yellow) 100%
+  );
 }
 
 .works-detail__close {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
   flex-shrink: 0;
   width: 2.5rem;
   height: 2.5rem;
@@ -2832,7 +3426,7 @@ a:hover {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: rgba(20, 18, 26, 0.45);
+  color: var(--text-on-light);
   cursor: pointer;
   font: inherit;
   line-height: 1;
@@ -2842,8 +3436,8 @@ a:hover {
 }
 
 .works-detail__close:hover {
-  color: var(--ink);
-  background: rgba(20, 18, 26, 0.05);
+  color: var(--palette-blue-dim);
+  background: rgb(var(--blue-rgb) / 0.08);
 }
 
 .works-detail__close:focus-visible {
@@ -2865,20 +3459,26 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-on-light);
   cursor: pointer;
   font-size: 1.35rem;
   font-weight: 500;
   line-height: 1;
-  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.1);
-  transition: background 0.15s ease, transform 0.12s ease;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 6px 18px rgb(var(--blue-rgb) / 0.22);
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .works-detail__arrow:hover {
-  background: #fff;
+  color: var(--palette-blue-dim);
+  background: var(--surface-light-hover);
+  border-color: rgba(255, 255, 255, 0.85);
 }
 
 .works-detail__arrow:focus-visible {
@@ -2913,15 +3513,23 @@ a:hover {
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(20, 18, 26, 0.2);
+  background: rgb(var(--blue-rgb) / 0.32);
   cursor: pointer;
   transition:
     background 0.15s ease,
     transform 0.15s ease;
 }
 
+.works-detail__dot:hover {
+  background: rgb(var(--orange-rgb) / 0.62);
+}
+
+.works-detail__dot--active:hover {
+  background: var(--palette-orange);
+}
+
 .works-detail__dot--active {
-  background: var(--ink);
+  background: var(--palette-orange);
   transform: scale(1.15);
 }
 
@@ -2943,7 +3551,7 @@ a:hover {
   font-family: var(--font-body);
   font-size: 0.95rem;
   line-height: 1.75;
-  color: #4f4b56;
+  color: var(--on-accent);
   scrollbar-gutter: stable;
 }
 
@@ -2953,7 +3561,7 @@ a:hover {
 
 .works-detail__intro-p {
   margin: 0 0 0.85em;
-  color: #5c5763;
+  color: var(--text-on-light);
 }
 
 .works-detail__intro-p:last-child {
@@ -2966,8 +3574,9 @@ a:hover {
   font-size: 1.05rem;
   font-weight: 700;
   line-height: 1.35;
-  color: var(--ink);
+  color: var(--on-accent);
   letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .works-detail__body {
@@ -2976,7 +3585,7 @@ a:hover {
 
 .works-detail__para {
   margin: 0 0 1em;
-  color: #4f4b56;
+  color: var(--text-on-light);
 }
 
 .works-detail__para:last-child {
@@ -3034,15 +3643,18 @@ a:hover {
   margin: 0 0 1.5rem;
   line-height: 1.15;
   color: var(--section-heading-terracotta);
+  text-align: center;
 }
 
 .section__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem 1.5rem;
   margin-bottom: 2rem;
+  text-align: center;
 }
 
 .section__head .section__title {
@@ -3053,6 +3665,8 @@ a:hover {
   margin: 0;
   font-size: 0.9rem;
   color: var(--ink-soft);
+  text-align: center;
+  max-width: 62ch;
 }
 
 .prose p {
@@ -3073,20 +3687,36 @@ a:hover {
 }
 
 .schedule-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 220px) 1fr;
   gap: 1rem 1.75rem;
   align-items: center;
   padding: 1.2rem 1.35rem;
-  background: #fff;
-  border: 1px solid var(--line);
+  isolation: isolate;
   border-radius: 14px;
-  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.04), 0 10px 32px rgba(20, 18, 26, 0.06);
+  border: 1px solid rgb(var(--blue-rgb) / 0.22);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 6px 24px rgb(var(--blue-rgb) / 0.18);
+  background: var(--surface-light);
+  color: var(--on-accent);
   opacity: 0;
   transition:
     opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .schedule-card {
+    background: var(--surface-light);
+    border-color: rgb(var(--blue-rgb) / 0.28);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 8px 28px rgb(var(--blue-rgb) / 0.16);
+  }
 }
 
 .schedule-card--from-left:not(.schedule-card--visible) {
@@ -3110,7 +3740,19 @@ a:hover {
 }
 
 .schedule-card:hover {
-  box-shadow: 0 1px 0 rgba(20, 18, 26, 0.05), 0 16px 40px rgba(20, 18, 26, 0.08);
+  border-color: rgb(var(--orange-rgb) / 0.42);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 12px 32px rgb(var(--blue-rgb) / 0.2),
+    0 18px 44px rgb(var(--orange-rgb) / 0.14);
+  background: var(--surface-light-hover);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .schedule-card:hover {
+    background: var(--surface-light-hover);
+    border-color: rgb(var(--orange-rgb) / 0.38);
+  }
 }
 
 .schedule-card__meta {
@@ -3127,11 +3769,12 @@ a:hover {
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
+  color: var(--on-accent);
 }
 
 .schedule-card__time {
   font-size: 0.82rem;
-  color: var(--ink-soft);
+  color: var(--text-on-light);
 }
 
 .schedule-card__name {
@@ -3139,7 +3782,7 @@ a:hover {
   font-size: clamp(1rem, 2.2vw, 1.08rem);
   font-weight: 600;
   line-height: 1.45;
-  color: var(--ink);
+  color: var(--on-accent);
 }
 
 @media (max-width: 640px) {
@@ -3172,10 +3815,11 @@ a:hover {
 }
 
 .map__hint {
-  margin: -0.5rem 0 1.25rem;
+  margin: -0.5rem auto 1.25rem;
   font-size: 0.92rem;
   color: var(--ink-soft);
   max-width: 52ch;
+  text-align: center;
 }
 
 .map-area {
@@ -3224,7 +3868,11 @@ a:hover {
   }
 
   .footer {
-    background: #fff;
+    background: linear-gradient(
+      180deg,
+      var(--page-bg-from) 0%,
+      color-mix(in srgb, var(--page-bg-to) 88%, var(--page-bg-from)) 100%
+    );
   }
 
   .work-card {
@@ -3245,6 +3893,7 @@ a:hover {
 }
 
 .footer a:hover {
+  color: #fff;
   text-decoration: underline;
 }
 

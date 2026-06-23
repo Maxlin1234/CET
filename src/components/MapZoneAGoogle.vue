@@ -161,7 +161,7 @@ onMounted(async () => {
   flex-direction: column;
   justify-content: flex-end;
   gap: 0.15rem;
-  color: var(--paper, #fff);
+  color: var(--map-corner-text, #f6f4ff);
   text-shadow:
     0 0 6px rgba(0, 0, 0, 0.85),
     0 1px 2px rgba(0, 0, 0, 0.7);

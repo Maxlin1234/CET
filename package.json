@@ -11,9 +11,11 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "@georgedoescode/generative-utils": "^2.0.1",
     "@googlemaps/js-api-loader": "^2.0.2",
     "gsap": "^3.15.0",
     "split-type": "^0.3.4",
+    "three": "^0.184.0",
     "vue": "^3.5.32"
   },
   "devDependencies": {

@@ -44,6 +44,11 @@ export const messages = {
       officialAboutAria:
         '開啟臺灣文博會官方網站「關於」頁（另開新分頁）',
     },
+    /** 「關於我們」上方：滑鼠／觸控位置會改變漸層高光範圍 */
+    aboutGlow: {
+      ariaLabel:
+        '互動光影區：八格藍／淺藍／黃綠漸層，移動游標可調整上下分界與每欄高光',
+    },
     schedule: {
       title: '場次',
       note: '* 實際節目以現場公告為準',
@@ -132,16 +137,15 @@ export const messages = {
     /** 右側社群直欄（連結請依實際官方帳號修改） */
     social: {
       railAria: '社群媒體與聯絡',
+      followLabel: '聯絡我們',
       facebook: 'Facebook',
       instagram: 'Instagram',
-      threads: 'Threads',
       youtube: 'YouTube',
       email: '電子郵件',
       backToTop: '回到頂部',
       urls: {
         facebook: 'https://www.facebook.com/creativeexpotw',
         instagram: 'https://www.instagram.com/creativeexpotw/',
-        threads: 'https://www.threads.net/@creativeexpotw',
         youtube: 'https://www.youtube.com/@creativeexpotw',
         email: 'mailto:info@clab.org.tw',
       },
@@ -191,12 +195,16 @@ export const messages = {
       officialAboutAria:
         'Open Taiwan Creative Expo official About page (new tab)',
     },
+    aboutGlow: {
+      ariaLabel:
+        'Eight-cell blue / cyan / yellow gradient—drag to adjust divider and glow',
+    },
     schedule: {
       title: 'Schedule',
       note: '＊Programmes are subject to on-site announcements',
       slots: [
         { day: 'Thu 15 May', time: '11:00–20:00', name: 'Opening / Curator tour 14:00' },
-        { day: 'Fri 16 May', time: '11:00–20:00', name: 'Artist talk: city & senses 16:30' },
+        { day: 'Fri 16 May', time: '11:00–20:00', name: 'nArtist talk: city & senses 16:30' },
         { day: 'Sat 17 May', time: '10:00–21:00', name: 'Evening programme / Sound performance 19:30' },
         { day: 'Sun 18 May', time: '10:00–18:00', name: 'Family workshops 11:00, 15:00' },
       ],
@@ -275,16 +283,15 @@ export const messages = {
     },
     social: {
       railAria: 'Social media and contact',
+      followLabel: 'Contact Us',
       facebook: 'Facebook',
       instagram: 'Instagram',
-      threads: 'Threads',
       youtube: 'YouTube',
       email: 'Email',
       backToTop: 'Back to top',
       urls: {
         facebook: 'https://www.facebook.com/creativeexpotw',
         instagram: 'https://www.instagram.com/creativeexpotw/',
-        threads: 'https://www.threads.net/@creativeexpotw',
         youtube: 'https://www.youtube.com/@creativeexpotw',
         email: 'mailto:info@clab.org.tw',
       },

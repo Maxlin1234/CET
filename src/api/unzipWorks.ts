@@ -1,5 +1,5 @@
 import type { Lang } from '@/i18n'
-import type { WorkCard } from '@/types/workCard'
+import type { WorkArtist, WorkCard } from '@/types/workCard'
 
 type UnzipMedia = {
   url?: string
@@ -10,10 +10,19 @@ type UnzipPhoto = {
   image_media?: UnzipMedia | null
 }
 
-type UnzipCollective = {
+type UnzipAuthor = {
   name?: string | null
   name_zh_tw?: string | null
   display_name?: string | null
+  image_1920_media?: UnzipMedia | null
+}
+
+type UnzipCollective = UnzipAuthor & {
+  id?: number
+}
+
+type UnzipContributor = UnzipAuthor & {
+  id?: number
 }
 
 export type UnzipWork = {
@@ -27,6 +36,7 @@ export type UnzipWork = {
   image_1920_media?: UnzipMedia | null
   photos?: UnzipPhoto[] | null
   collectives?: UnzipCollective[] | null
+  contributors?: UnzipContributor[] | null
 }
 
 type UnzipWorksResponse = {
@@ -91,15 +101,42 @@ function buildSubtitle(lang: Lang, work: UnzipWork, title: string): string | und
 
 function buildIntro(lang: Lang, work: UnzipWork): string | undefined {
   const names = (work.collectives ?? [])
-    .map((collective) =>
-      lang === 'zh'
-        ? collective.name_zh_tw?.trim() || collective.display_name?.trim() || collective.name?.trim()
-        : collective.display_name?.trim() || collective.name?.trim() || collective.name_zh_tw?.trim(),
-    )
+    .map((collective) => pickAuthorName(lang, collective))
     .filter((name): name is string => !!name)
 
   if (names.length === 0) return undefined
   return names.join(lang === 'zh' ? '、' : ', ')
+}
+
+function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
+  const name =
+    lang === 'zh'
+      ? author.name_zh_tw?.trim() || author.display_name?.trim() || author.name?.trim()
+      : author.display_name?.trim() || author.name?.trim() || author.name_zh_tw?.trim()
+  return name || undefined
+}
+
+function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
+  const contributors = work.contributors ?? []
+  const collectives = work.collectives ?? []
+  /** 有個別創作者照片時優先顯示個人，避免團體與個人重複 */
+  const hasContributorPhotos = contributors.some((c) => !!c.image_1920_media?.url?.trim())
+  const authors: UnzipAuthor[] = hasContributorPhotos ? contributors : collectives
+  const seen = new Set<string>()
+  const artists: WorkArtist[] = []
+
+  for (const author of authors) {
+    const photoUrl = author.image_1920_media?.url?.trim()
+    if (!photoUrl) continue
+    const name = pickAuthorName(lang, author)
+    if (!name) continue
+    const key = `${name}|${photoUrl}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    artists.push({ name, photoUrl })
+  }
+
+  return artists
 }
 
 export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
@@ -107,6 +144,7 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
   const body = pickLocalizedText(lang, work.note_zh_tw, work.note)
   const gallery = buildGallery(work)
   const image = gallery[0] ?? ''
+  const artists = buildArtists(lang, work)
 
   return {
     title,
@@ -115,6 +153,7 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
     intro: buildIntro(lang, work),
     subtitle: buildSubtitle(lang, work, title),
     body,
+    ...(artists.length > 0 ? { artists } : {}),
   }
 }
 

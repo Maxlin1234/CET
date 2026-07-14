@@ -10,4 +10,6 @@ interface ImportMetaEnv {
   readonly VITE_UNZIP_API_KEY?: string
 }
 
+declare global {}
+
 export {}

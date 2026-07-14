@@ -1,3 +1,8 @@
+export type WorkArtist = {
+  name: string
+  photoUrl: string
+}
+
 export type WorkCard = {
   title: string
   image: string
@@ -5,4 +10,5 @@ export type WorkCard = {
   intro?: string
   subtitle?: string
   body: string
+  artists?: readonly WorkArtist[]
 }

@@ -168,11 +168,7 @@ onMounted(async () => {
 }
 
 .map-zone-a__corner-overlay .map-zone-a__corner-title {
-  font-family:
-    var(--font-display),
-    'Playfair Display',
-    'Noto Sans TC',
-    serif;
+  font-family: var(--font-title);
   font-size: clamp(1.05rem, 3.8vw, 1.85rem);
   line-height: 1.18;
   font-weight: 700;

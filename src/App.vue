@@ -7,22 +7,27 @@ import {
   type UnzipWork,
 } from '@/api/unzipWorks'
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
+import ScheduleCalendar from '@/components/ScheduleCalendar.vue'
 import type { Lang } from './i18n'
 import { messages } from './i18n'
 import type { WorkCard } from '@/types/workCard'
 import { Gradient } from '@/Gradient.js'
+import { initGridRevealCanvas } from '@/lib/gridRevealCanvas'
+import { initMouseTrailCanvas } from '@/lib/mouseTrailCanvas'
+import { initVantaClouds } from '@/lib/vantaClouds'
 import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import SplitType from 'split-type'
-// import {THREE} from 'three';
+gsap.registerPlugin(ScrollTrigger)
 
+/** 與 setupHeroScrollParallax 中 #about marginTop 動畫一致 */
+const HERO_ABOUT_MARGIN_SHIFT_RATIO = 0.34
 
 function envNumber(value: string | undefined, fallback: number): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
 }
 
-let footerStripeGradient: Gradient | null = null
-let worksStripeGradient: Gradient | null = null
 let heroStripeGradient: Gradient | null = null
 
 const googleMapsApiKey = String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '').trim()
@@ -43,12 +48,15 @@ const heroMotionOk = ref(true)
 const HERO_BACKGROUND_PHOTO = true
 /** 底部 SVG 波浪裝飾（暫時關閉） */
 const SHOW_HERO_WAVE = false
+/** 關於我們上方漸層高光區（暫時隱藏） */
+const SHOW_ABOUT_GLOW = false
 /** 首屏 Banner 照片（置於 `public/`，與作品區素材一致） */
 const HERO_BANNER_PHOTO_SRC = '/aboutus.jpeg'
 
 /** Banner 主／副標：拆字＋字重動畫節點（見 setupHeroFontWeightEffect） */
 const heroTitleFontWeightRef = ref<HTMLElement | null>(null)
 const heroTitleFontWeightRef_2 = ref<HTMLElement | null>(null)
+const vantaRef = ref<HTMLElement | null>(null)
 let heroFontWeightMedia: ReturnType<typeof gsap.matchMedia> | null = null
 
 function teardownHeroFontWeightEffect() {
@@ -128,6 +136,17 @@ function syncHeroMotionPref() {
 
 function onHeroMotionMqlChange() {
   syncHeroMotionPref()
+  teardownHeroScrollParallax()
+  if (!heroMotionOk.value) {
+    teardownHeroGridReveal()
+    teardownVantaEffect()
+    teardownMouseTrailCanvas()
+  } else {
+    initHeroGridRevealCanvas()
+    initVantaEffect()
+    initMouseTrailCanvasEffect()
+    void nextTick(() => setupHeroScrollParallax())
+  }
 }
 
 /** 首屏 Stripe WebGL：`timeScale` 隨滑鼠移動強度（僅 banner 區 #hero） */
@@ -229,11 +248,21 @@ function onHeroStripeMouseLeave() {
 }
 
 watch(heroMotionOk, (ok) => {
+  teardownHeroScrollParallax()
   if (!ok) {
     resetHeroStripePointerSpeed()
     stopAboutGlowIdleLoop()
+    stopWorksDetailAutoplay()
+    teardownHeroGridReveal()
+    teardownVantaEffect()
+    teardownMouseTrailCanvas()
   } else {
+    initHeroGridRevealCanvas()
+    initVantaEffect()
+    initMouseTrailCanvasEffect()
     startAboutGlowIdleLoop()
+    if (worksDetailIndex.value != null) startWorksDetailAutoplay()
+    void nextTick(() => setupHeroScrollParallax())
   }
 })
 
@@ -249,6 +278,213 @@ const stored = (): Lang | null => {
   return v === 'en' || v === 'zh' ? v : null
 }
 
+const heroPhotoWrapRef = ref<HTMLElement | null>(null)
+const heroGridCanvasRef = ref<HTMLCanvasElement | null>(null)
+
+let teardownHeroGridRevealCanvas: (() => void) | null = null
+
+function initHeroGridRevealCanvas() {
+  teardownHeroGridRevealCanvas?.()
+  teardownHeroGridRevealCanvas = null
+  if (!HERO_BACKGROUND_PHOTO || !heroMotionOk.value) return
+
+  void nextTick(() => {
+    const canvas = heroGridCanvasRef.value
+    const wrap = heroPhotoWrapRef.value
+    const heroSection = document.getElementById('hero')
+    if (!canvas || !wrap) return
+
+    teardownHeroGridRevealCanvas = initGridRevealCanvas(canvas, {
+      imgSrc: HERO_BANNER_PHOTO_SRC,
+      boxSize: 60,
+      dots: false,
+      coverPosition: 'top',
+      pointerRoot: heroSection instanceof HTMLElement ? heroSection : undefined,
+      sizeRoot: wrap,
+    })
+  })
+}
+
+function teardownHeroGridReveal() {
+  teardownHeroGridRevealCanvas?.()
+  teardownHeroGridRevealCanvas = null
+}
+
+let teardownVanta: (() => void) | null = null
+
+function initVantaEffect() {
+  teardownVanta?.()
+  teardownVanta = null
+  if (!heroMotionOk.value) return
+  const el = vantaRef.value
+  if (!el) return
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!vantaRef.value || !heroMotionOk.value) return
+      try {
+        teardownVanta = initVantaClouds({
+          el: vantaRef.value,
+          mouseControls: true,
+          touchControls: true,
+          gyroControls: false,
+          minHeight: 200,
+          minWidth: 200,
+        })
+      } catch (err) {
+        console.warn('[vanta] CLOUDS init failed', err)
+      }
+    })
+  })
+}
+
+function teardownVantaEffect() {
+  teardownVanta?.()
+  teardownVanta = null
+}
+
+let teardownMouseTrail: (() => void) | null = null
+
+function initMouseTrailCanvasEffect() {
+  teardownMouseTrail?.()
+  teardownMouseTrail = null
+  if (!heroMotionOk.value) return
+  const canvas = document.getElementById('mouse-trail-canvas')
+  if (!(canvas instanceof HTMLCanvasElement)) return
+  const invertCanvas = document.getElementById('mouse-trail-invert-canvas')
+  const textZoneCanvas = document.getElementById('mouse-trail-text-canvas')
+  teardownMouseTrail = initMouseTrailCanvas(canvas, {
+    pixelSize: 25 * 2,
+    pointerColor: [153 / 255, 120 / 255, 1, 1],
+    textZonePointerColor: [27 / 255, 47 / 255, 158 / 255, 1],
+    invertCanvas: invertCanvas instanceof HTMLCanvasElement ? invertCanvas : undefined,
+    textZoneCanvas: textZoneCanvas instanceof HTMLCanvasElement ? textZoneCanvas : undefined,
+    invertOnText: true,
+    suppressSelectors: ['#hero'],
+    allowSelectors: ['#about'],
+    shrinkSelectors: ['.schedule-calendar'],
+    shrinkScale: 0.68,
+  })
+}
+
+function teardownMouseTrailCanvas() {
+  teardownMouseTrail?.()
+  teardownMouseTrail = null
+}
+
+let heroScrollParallaxCtx: gsap.Context | null = null
+
+function teardownHeroScrollParallax() {
+  heroScrollParallaxCtx?.revert()
+  heroScrollParallaxCtx = null
+}
+
+/** Banner 捲動視差：背景慢移、前景快移 — 須在 DOM 掛載後執行 */
+function setupHeroScrollParallax() {
+  teardownHeroScrollParallax()
+  if (typeof window === 'undefined' || !heroMotionOk.value) return
+
+  const hero = document.getElementById('hero')
+  const about = document.getElementById('about')
+  if (!hero) return
+
+  const BG_SHIFT_RATIO = HERO_ABOUT_MARGIN_SHIFT_RATIO
+  const FG_SHIFT_RATIO = 0.52
+  const BG_SCALE = 1.07
+  /** 僅 scrim 等疊色層加高；照片／canvas 維持 100% 才不會載入時被 cover 裁掉 */
+  const overlayOverscan = BG_SHIFT_RATIO + (BG_SCALE - 1) + 0.06
+
+  heroScrollParallaxCtx = gsap.context(() => {
+    const heroHeight = () => hero.offsetHeight
+
+    const imageBgLayers = gsap.utils
+      .toArray<HTMLElement>(
+        '#hero .hero__photo, #hero .hero__canvas, #hero .hero__grid-canvas',
+      )
+      .filter((el): el is HTMLElement => el instanceof HTMLElement)
+
+    const overlayBgLayers = gsap.utils
+      .toArray<HTMLElement>('#hero .hero__scrim, #hero .hero__wave')
+      .filter((el): el is HTMLElement => el instanceof HTMLElement)
+
+    const fgLayers = gsap.utils
+      .toArray<HTMLElement>('#hero .hero_title, #hero .hero_title-bottom, #hero .hero__inner')
+      .filter((el): el is HTMLElement => el instanceof HTMLElement)
+
+    imageBgLayers.forEach((el) => {
+      gsap.set(el, {
+        top: 0,
+        bottom: 0,
+        height: '100%',
+        transformOrigin: '50% 100%',
+      })
+    })
+
+    overlayBgLayers.forEach((el) => {
+      gsap.set(el, {
+        top: 0,
+        bottom: 'auto',
+        height: `${(1 + overlayOverscan) * 100}%`,
+        transformOrigin: '50% 100%',
+      })
+    })
+
+    const bgLayers = [...imageBgLayers, ...overlayBgLayers]
+
+    const scrollRange = {
+      trigger: hero,
+      endTrigger: about ?? hero,
+      start: 'center center',
+      end: about ? 'top 50%' : 'bottom top',
+      scrub: 1.35,
+      invalidateOnRefresh: true,
+       //markers: true,
+    }
+
+    const transition = gsap.timeline({ scrollTrigger: scrollRange })
+
+    if (bgLayers.length) {
+      transition.to(
+        bgLayers,
+        {
+          y: () => -heroHeight() * BG_SHIFT_RATIO,
+          scale: BG_SCALE,
+          ease: 'none',
+        },
+        0,
+      )
+    }
+
+    if (fgLayers.length) {
+      transition.to(
+        fgLayers,
+        {
+          y: () => -heroHeight() * FG_SHIFT_RATIO,
+          ease: 'none',
+        },
+        0,
+      )
+    }
+
+    /** 用 marginTop 上拉（不用 transform），避免底部出現 1px 深色縫隙 */
+    if (about) {
+      const aboutMarginBase = 'clamp(-7rem, -16vh, -3.5rem)'
+      transition.fromTo(
+        about,
+        { marginTop: aboutMarginBase },
+        {
+          marginTop: () =>
+            `calc(${aboutMarginBase} - ${heroHeight() * BG_SHIFT_RATIO}px)`,
+          ease: 'none',
+        },
+        0,
+      )
+    }
+  })
+
+  ScrollTrigger.refresh()
+}
+
 onMounted(async () => {
   const s = stored()
   if (s) lang.value = s
@@ -256,7 +492,7 @@ onMounted(async () => {
   motionMql = window.matchMedia('(prefers-reduced-motion: reduce)')
   motionMql.addEventListener('change', onHeroMotionMqlChange)
 
-  /** WebGL 動態底：首屏、footer、作品區 */
+  /** WebGL 動態底：首屏 */
   await nextTick()
   requestAnimationFrame(() => {
     if (heroMotionOk.value && document.getElementById('hero-gradient-canvas')) {
@@ -266,20 +502,6 @@ onMounted(async () => {
         heroStripeGradient = null
       }
     }
-    if (heroMotionOk.value && document.getElementById('gradient-canvas')) {
-      try {
-        footerStripeGradient = new Gradient().initGradient('#gradient-canvas')
-      } catch {
-        footerStripeGradient = null
-      }
-    }
-    if (heroMotionOk.value && document.getElementById('works-gradient-canvas')) {
-      try {
-        worksStripeGradient = new Gradient().initGradient('#works-gradient-canvas')
-      } catch {
-        worksStripeGradient = null
-      }
-    }
   })
   await nextTick()
   bindWorksMarqueeSizing()
@@ -287,25 +509,29 @@ onMounted(async () => {
   void loadWorksFromApi()
   await nextTick()
   setupHeroFontWeightEffect()
+  initHeroGridRevealCanvas()
+  await nextTick()
+  initVantaEffect()
+  initMouseTrailCanvasEffect()
   if (heroMotionOk.value) startAboutGlowIdleLoop()
+  setupHeroScrollParallax()
 })
 
 onUnmounted(() => {
+  teardownHeroScrollParallax()
+  teardownHeroGridReveal()
+  teardownVantaEffect()
+  teardownMouseTrailCanvas()
   teardownHeroFontWeightEffect()
   motionMql?.removeEventListener('change', onHeroMotionMqlChange)
   resetHeroStripePointerSpeed()
   heroStripeGradient?.disconnect()
   heroStripeGradient = null
-  footerStripeGradient?.disconnect()
-  footerStripeGradient = null
-  worksStripeGradient?.disconnect()
-  worksStripeGradient = null
-  scheduleIntersectionObserver?.disconnect()
-  scheduleIntersectionObserver = null
   stopWorksMarqueeLoop()
   worksResizeObserver?.disconnect()
   worksResizeObserver = null
   window.removeEventListener('keydown', onWorksDetailKeydown)
+  stopWorksDetailAutoplay()
   if (typeof document !== 'undefined') document.body.style.overflow = ''
   stopAboutGlowIdleLoop()
 })
@@ -371,18 +597,30 @@ const worksDetailGalleryUrls = computed(() => {
   return resolveWorkGalleryUrls(c)
 })
 
+const worksDetailArtists = computed(() => {
+  const c = worksDetailCard.value as { artists?: readonly { name: string; photoUrl: string }[] } | null
+  return c?.artists ?? []
+})
+
 const worksDetailSlideCount = computed(() => {
   const n = worksDetailGalleryUrls.value.length
   return n > 0 ? n : 1
 })
 
-const worksDetailCurrentImageSrc = computed(() => {
-  const urls = worksDetailGalleryUrls.value
-  if (urls.length === 0) return null as string | null
-  const n = urls.length
-  const i = ((worksDetailSlideIx.value % n) + n) % n
-  return urls[i] ?? null
+const worksDetailActiveSlideIx = computed(() => {
+  const n = worksDetailGalleryUrls.value.length
+  if (n === 0) return 0
+  return ((worksDetailSlideIx.value % n) + n) % n
 })
+
+function preloadWorkGalleryImages(urls: readonly string[]) {
+  if (typeof window === 'undefined') return
+  for (const url of urls) {
+    const probe = new Image()
+    probe.decoding = 'async'
+    probe.src = url
+  }
+}
 
 function splitProseParagraphs(text: string): string[] {
   return text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
@@ -412,16 +650,104 @@ function openWorksDetail(index: number) {
   nextTick(() => document.getElementById('works-detail-title')?.focus())
 }
 
+function normalizeWorkTitle(value: string) {
+  return value
+    .normalize('NFKC')
+    .replace(/[\s　]/g, '')
+    .replace(/[：:－—–\-_/\\|《》〈〉「」『』【】\[\]()（）]/g, '')
+    .toLowerCase()
+}
+
+const openableWorkTitles = computed(() => {
+  const titles: string[] = []
+  for (const card of worksCards.value) {
+    if (card.title?.trim()) titles.push(card.title.trim())
+    if (card.subtitle?.trim()) titles.push(card.subtitle.trim())
+  }
+  return titles
+})
+
+function findWorkCardIndexByProgramName(name: string): number {
+  const needle = normalizeWorkTitle(name)
+  if (!needle) return -1
+  return worksCards.value.findIndex((card) => {
+    const candidates = [card.title, card.subtitle].filter((t): t is string => !!t?.trim())
+    return candidates.some((title) => {
+      const hay = normalizeWorkTitle(title)
+      return hay === needle || hay.includes(needle) || needle.includes(hay)
+    })
+  })
+}
+
+function openWorksDetailByProgram(program: { name: string }) {
+  const ix = findWorkCardIndexByProgramName(program.name)
+  if (ix < 0) return
+  openWorksDetail(ix)
+}
+
 function closeWorksDetail() {
   worksDetailIndex.value = null
 }
 
-function worksDetailStepSlide(delta: number) {
+function worksDetailAdvanceSlide(delta: number) {
   const n = worksDetailGalleryUrls.value.length
-  const slots = n > 0 ? n : 1
-  if (slots < 2) return
-  worksDetailSlideIx.value = (worksDetailSlideIx.value + delta + slots) % slots
+  if (n < 2) return
+  worksDetailSlideIx.value = (worksDetailSlideIx.value + delta + n) % n
 }
+
+function worksDetailGoToSlide(index: number) {
+  worksDetailSlideIx.value = index
+  restartWorksDetailAutoplay()
+}
+
+function worksDetailStepSlide(delta: number) {
+  worksDetailAdvanceSlide(delta)
+  restartWorksDetailAutoplay()
+}
+
+const WORKS_DETAIL_AUTOPLAY_MS = 3000
+let worksDetailAutoplayTimer: ReturnType<typeof setInterval> | null = null
+
+function stopWorksDetailAutoplay() {
+  if (worksDetailAutoplayTimer != null) {
+    clearInterval(worksDetailAutoplayTimer)
+    worksDetailAutoplayTimer = null
+  }
+}
+
+function startWorksDetailAutoplay() {
+  stopWorksDetailAutoplay()
+  if (typeof window === 'undefined') return
+  if (!heroMotionOk.value) return
+  if (worksDetailIndex.value == null) return
+  if (worksDetailGalleryUrls.value.length < 2) return
+  worksDetailAutoplayTimer = setInterval(() => {
+    worksDetailAdvanceSlide(1)
+  }, WORKS_DETAIL_AUTOPLAY_MS)
+}
+
+function restartWorksDetailAutoplay() {
+  if (worksDetailIndex.value == null) return
+  startWorksDetailAutoplay()
+}
+
+watch(worksDetailIndex, (ix) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  if (ix != null) {
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onWorksDetailKeydown)
+    startWorksDetailAutoplay()
+  } else {
+    document.body.style.overflow = ''
+    window.removeEventListener('keydown', onWorksDetailKeydown)
+    stopWorksDetailAutoplay()
+  }
+})
+
+watch(worksDetailGalleryUrls, (urls) => {
+  if (urls.length) preloadWorkGalleryImages(urls)
+  if (worksDetailIndex.value != null) restartWorksDetailAutoplay()
+}, { immediate: true })
 
 function onWorksDetailKeydown(e: KeyboardEvent) {
   if (worksDetailIndex.value == null) return
@@ -452,22 +778,10 @@ function onWorksDetailTouchEnd(e: TouchEvent) {
   worksDetailStepSlide(dx < 0 ? 1 : -1)
 }
 
-watch(worksDetailIndex, (ix) => {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return
-  if (ix != null) {
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', onWorksDetailKeydown)
-  } else {
-    document.body.style.overflow = ''
-    window.removeEventListener('keydown', onWorksDetailKeydown)
-  }
-})
-
 /** 作品區：單行無縫跑馬燈（可拖曳；prefers-reduced-motion 時僅停自動捲動） */
 const worksSegmentRef = ref<HTMLElement | null>(null)
 const worksOffsetPx = ref(0)
 const worksDragging = ref(false)
-const worksMarqueePaused = ref(false)
 let worksPointerId: number | null = null
 let worksLastPointerX = 0
 let worksMarqueeCycleWidth = 0
@@ -511,7 +825,7 @@ function worksMarqueeFrame(ts: number) {
   const dt = Math.min(0.1, (ts - worksMarqueeLastTs) / 1000)
   worksMarqueeLastTs = ts
 
-  if (!worksDragging.value && heroMotionOk.value && w > 0 && !worksMarqueePaused.value) {
+  if (!worksDragging.value && heroMotionOk.value && w > 0) {
     worksOffsetPx.value -= WORKS_MARQUEE_PX_PER_SEC * dt
     normalizeWorksMarqueeOffset()
   }
@@ -543,10 +857,6 @@ function bindWorksMarqueeSizing() {
     worksResizeObserver.observe(el)
     if (track) worksResizeObserver.observe(track)
   })
-}
-
-function toggleWorksMarqueePause() {
-  worksMarqueePaused.value = !worksMarqueePaused.value
 }
 
 function onWorksMarqueePointerDown(e: PointerEvent) {
@@ -620,77 +930,9 @@ function onWorksMarqueeLostPointerCapture(e: PointerEvent) {
   worksPointerDownCardIndex.value = null
 }
 
-const scheduleCardVisible = reactive<Record<number, boolean>>({})
-/** 指派後覆寫為由捲動順序決定；未定義時 {@link scheduleSlidesFromLeft} 會用場次別 i 推測位移方向 */
-const scheduleEnterFromLeft = reactive<Record<number, boolean>>({})
-let scheduleIntersectionObserver: IntersectionObserver | null = null
-let scheduleRevealGen = 0
-let scheduleScrollOrdinal = 0
-
-function scheduleSlidesFromLeft(i: number): boolean {
-  const v = scheduleEnterFromLeft[i]
-  return typeof v === 'boolean' ? v : i % 2 === 0
-}
-
-function bindScheduleCard(el: Element | null, index: number) {
-  if (typeof window === 'undefined') return
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    if (el) {
-      scheduleEnterFromLeft[index] = index % 2 === 0
-      scheduleCardVisible[index] = true
-    }
-    return
-  }
-  if (!el) return
-  if (!scheduleIntersectionObserver) {
-    scheduleIntersectionObserver = new IntersectionObserver(
-      (entries) => {
-        if (!scheduleIntersectionObserver) return
-        const incoming = entries
-          .filter((e) => e.isIntersecting)
-          .map((e) => ({
-            target: e.target as HTMLElement,
-            ix: Number((e.target as HTMLElement).dataset.scheduleIx),
-            top: e.boundingClientRect.top,
-          }))
-          .filter((x) => Number.isFinite(x.ix))
-          .sort((a, b) => (a.top !== b.top ? a.top - b.top : a.ix - b.ix))
-
-        incoming.forEach((item, batchIndex) => {
-          scheduleIntersectionObserver!.unobserve(item.target)
-          scheduleEnterFromLeft[item.ix] = scheduleScrollOrdinal % 2 === 0
-          scheduleScrollOrdinal += 1
-          const delayMs = batchIndex * 72
-          const gen = scheduleRevealGen
-          if (delayMs === 0) {
-            scheduleCardVisible[item.ix] = true
-          } else {
-            window.setTimeout(() => {
-              if (gen !== scheduleRevealGen) return
-              scheduleCardVisible[item.ix] = true
-            }, delayMs)
-          }
-        })
-      },
-      { threshold: 0.12, rootMargin: '0px 0px -12% 0px' },
-    )
-  }
-  const elHt = el as HTMLElement
-  elHt.dataset.scheduleIx = String(index)
-  scheduleIntersectionObserver.observe(elHt)
-}
-
 watch(lang, (l) => {
   document.documentElement.lang = l === 'zh' ? 'zh-Hant' : 'en'
   localStorage.setItem('usaf-lang', l)
-  scheduleRevealGen += 1
-  scheduleScrollOrdinal = 0
-  for (const k of Object.keys(scheduleCardVisible)) {
-    delete scheduleCardVisible[Number(k)]
-  }
-  for (const k of Object.keys(scheduleEnterFromLeft)) {
-    delete scheduleEnterFromLeft[Number(k)]
-  }
   admissionTab.value = 'notes'
   bindWorksMarqueeSizing()
 })
@@ -750,6 +992,7 @@ function aboutGlowIdleFrame(ts: DOMHighResTimeStamp) {
 }
 
 function startAboutGlowIdleLoop() {
+  if (!SHOW_ABOUT_GLOW) return
   if (typeof window === 'undefined' || typeof requestAnimationFrame === 'undefined') return
   stopAboutGlowIdleLoop()
   aboutGlowIdleRafId = requestAnimationFrame(aboutGlowIdleFrame)
@@ -844,9 +1087,64 @@ const navAnchors = computed(() =>
   })),
 )
 
+const SECTION_HEADING_SELECTOR =
+  '.section__head, .section__title, .admission-panel__title, .works-board__title'
+
+function getNavAnchorOffset(): number {
+  const header = document.querySelector<HTMLElement>('.header')
+  if (header) {
+    return Math.ceil(header.getBoundingClientRect().height) + 12
+  }
+  return 80
+}
+
+function getHeroAboutParallaxMetrics() {
+  const hero = document.getElementById('hero')
+  if (!hero) return null
+  const trigger = ScrollTrigger.getAll().find((t) => t.trigger === hero)
+  if (!trigger) return null
+  return {
+    progress: trigger.progress,
+    marginShift: hero.offsetHeight * HERO_ABOUT_MARGIN_SHIFT_RATIO,
+  }
+}
+
+function isSectionAfterAbout(section: HTMLElement): boolean {
+  const about = document.getElementById('about')
+  if (!about) return false
+  return Boolean(section.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_PRECEDING)
+}
+
+function measureSectionScrollTop(section: HTMLElement): number {
+  ScrollTrigger.refresh()
+  const heading =
+    section.querySelector<HTMLElement>(SECTION_HEADING_SELECTOR) ?? section
+  const offset = getNavAnchorOffset()
+  const scrollY = window.scrollY
+  const rectTop = heading.getBoundingClientRect().top
+
+  if (isSectionAfterAbout(section)) {
+    const parallax = getHeroAboutParallaxMetrics()
+    if (parallax) {
+      const layoutBase = rectTop + scrollY + parallax.marginShift * parallax.progress
+      return Math.max(0, layoutBase - parallax.marginShift - offset)
+    }
+  }
+
+  return Math.max(0, rectTop + scrollY - offset)
+}
+
 function scrollToSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (typeof window === 'undefined') return
+  const section = document.getElementById(id)
+  if (!section) return
+
   menuOpen.value = false
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  window.scrollTo({
+    top: measureSectionScrollTop(section),
+    behavior: reduced ? 'auto' : 'smooth',
+  })
 }
 
 function scrollToPageTop() {
@@ -854,20 +1152,26 @@ function scrollToPageTop() {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
 }
+
+
+
 </script>
 
 <template>
+
   <div class="page">
     <header class="header">
       <div class="header__inner">
         <a
-          href="https://creativexpo.tw/zh-TW/posts"
+          href="https://fvl.clab.org.tw/"
           class="brand"
           target="_blank"
           rel="noopener noreferrer"
         >
-          <img class="brand__logo" src="/fvl_logo.png" width="520" height="120" :alt="txt.siteName" />
-          <span class="brand__tag">{{ txt.siteTagline }}</span>
+          <img class="brand__mark" src="/skyward.svg" width="120" height="120" :alt="txt.siteName" />
+          <span class="brand__text">
+            <span class="brand__eyebrow">{{ txt.siteTagline }}</span>
+          </span>
         </a>
 
         <div class="header__end">
@@ -875,30 +1179,30 @@ function scrollToPageTop() {
             <ul class="nav__list">
               <li v-for="item in navAnchors" :key="item.id">
                 <button type="button" class="nav__link" @click="scrollToSection(item.id)">
-                  {{ item.label }}
+                  <span class="nav__link__label">{{ item.label }}</span>
                 </button>
               </li>
             </ul>
           </nav>
           <div class="header__tools">
-            <div class="lang" role="group" :aria-label="txt.langSwitch">
-              <button
-                type="button"
-                class="lang__btn"
-                :class="{ 'lang__btn--active': lang === 'zh' }"
-                @click="setLang('zh')"
-              >
-                中
-              </button>
-              <button
-                type="button"
-                class="lang__btn"
-                :class="{ 'lang__btn--active': lang === 'en' }"
-                @click="setLang('en')"
-              >
-                EN
-              </button>
-            </div>
+            <button
+              v-if="lang === 'zh'"
+              type="button"
+              class="lang__solo"
+              :aria-label="txt.langSwitch"
+              @click="setLang('en')"
+            >
+              EN
+            </button>
+            <button
+              v-else
+              type="button"
+              class="lang__solo"
+              :aria-label="txt.langSwitch"
+              @click="setLang('zh')"
+            >
+              中
+            </button>
             <button
               type="button"
               class="nav-toggle"
@@ -922,18 +1226,30 @@ function scrollToPageTop() {
         @mousemove="onHeroStripePointerMove"
         @mouseleave="onHeroStripeMouseLeave"
       >
-        <div v-if="HERO_BACKGROUND_PHOTO" class="hero__photo" aria-hidden="true">
-          <img
-            :src="HERO_BANNER_PHOTO_SRC"
-            alt=""
-            class="hero__photo-img"
-            width="1200"
-            height="756"
-            decoding="async"
-            loading="eager"
-            fetchpriority="high"
-          />
+        <div class="hero_title">
+          <div class="hero_title__stack">
+            <img
+              class="hero_title__img"
+              src="/title.svg"
+              alt="FUTURE VISION LAB @ SKYWARD 晴空季"
+              decoding="async"
+            />
+            <div class="hero_logo">
+              <img
+                class="hero_logo__img"
+                src="/logo.svg"
+                alt="FUTURE VISION LAB"
+                decoding="async"
+              />
+            </div>
+          </div>
         </div>
+        <div
+          v-if="HERO_BACKGROUND_PHOTO"
+          ref="heroPhotoWrapRef"
+          class="hero__photo"
+          aria-hidden="true"
+        />
         <canvas
           v-else
           id="hero-gradient-canvas"
@@ -942,6 +1258,12 @@ function scrollToPageTop() {
           aria-hidden="true"
         />
         <div class="hero__scrim" aria-hidden="true" />
+        <canvas
+          v-if="HERO_BACKGROUND_PHOTO && heroMotionOk"
+          ref="heroGridCanvasRef"
+          class="hero__grid-canvas"
+          aria-hidden="true"
+        />
         <div class="hero__backdrop" aria-hidden="true" />
         <div v-if="SHOW_HERO_WAVE" class="hero__wave" aria-hidden="true">
           <svg
@@ -971,27 +1293,31 @@ function scrollToPageTop() {
             />
           </svg>
         </div>
+       
         <div class="hero__inner">
-          <!-- <p class="hero__kicker">{{ txt.hero.kicker }}</p> -->
-          <!-- <h1 class="hero__title">
-            <span
-              ref="heroTitleFontWeightRef"
-              class="hero__title-main"
-              :class="{ 'hero__title-main--ascii': lang === 'en' }"
-            >{{ txt.hero.title }}</span>
-            <span
-              ref="heroTitleFontWeightRef_2"
-              class="hero__title-stack"
-              :class="{ 'hero__title-stack--ascii': lang === 'en' }"
-            >{{ txt.hero.subtitle }}</span>
-          </h1> -->
-          <button type="button" class="btn btn--ghost" @click="scrollToSection('schedule')">
-            {{ txt.hero.cta }}
-          </button>
+          <div class="hero__cta">
+            <span class="hero__cta-ripple" aria-hidden="true">
+              <span class="hero__cta-ripple__ring" />
+              <span class="hero__cta-ripple__ring" />
+              <span class="hero__cta-ripple__ring" />
+            </span>
+            <button type="button" class="btn btn--ghost hero__cta-btn" @click="scrollToSection('schedule')">
+              {{ txt.hero.cta }}
+            </button>
+          </div>
+        </div>
+        <div class="hero_title-bottom">
+          <img
+            class="hero_title-bottom__img"
+            src="/title2.svg"
+            alt="晴空季活動資訊"
+            decoding="async"
+          />
         </div>
       </section>
 
       <section
+        v-if="SHOW_ABOUT_GLOW"
         ref="aboutGlowRef"
         class="about-glow"
         :aria-label="txt.aboutGlow.ariaLabel"
@@ -1024,7 +1350,10 @@ function scrollToPageTop() {
       <section id="about" class="section section--about">
         <div class="section__inner section__inner--about">
           <div class="about-block__head">
-            <h2 class="section__title about-block__title">{{ txt.about.title }}</h2>
+              <div class="about_title">
+              <h1>About us</h1>
+              </div>
+           <h1 class="section__title about-block__title">{{ txt.about.title }}</h1>
             <a
               class="about-block__more"
               :href="txt.about.officialAboutUrl"
@@ -1048,32 +1377,21 @@ function scrollToPageTop() {
       </section>
 
       <section id="schedule" class="section section--schedule-grad">
-        <div class="section__inner">
+        <div class="section__inner section__inner--schedule">
           <div class="section__head">
-            <h2 class="section__title">{{ txt.schedule.title }}</h2>
+            <h2 id="schedule-heading" class="section__title">{{ txt.schedule.title }}</h2>
             <p class="section__note">{{ txt.schedule.note }}</p>
           </div>
-          <ul class="schedule-cards" role="list">
-            <li
-              v-for="(row, i) in txt.schedule.slots"
-              :key="`${lang}-${i}`"
-              class="schedule-card"
-              :class="{
-                'schedule-card--visible': scheduleCardVisible[i],
-                'schedule-card--from-left': scheduleSlidesFromLeft(i),
-                'schedule-card--from-right': !scheduleSlidesFromLeft(i),
-              }"
-              :ref="(el) => bindScheduleCard(el as Element | null, i)"
-            >
-              <div class="schedule-card__meta">
-                <span class="schedule-card__day">{{ row.day }}</span>
-                <span class="schedule-card__time">{{ row.time }}</span>
-              </div>
-              <p class="schedule-card__name">{{ row.name }}</p>
-            </li>
-          </ul>
+          <ScheduleCalendar
+            :lang="lang"
+            :schedule="txt.schedule"
+            :openable-work-titles="openableWorkTitles"
+            @select-program="openWorksDetailByProgram"
+          />
         </div>
       </section>
+
+    
 
       <section id="admission" class="section section--admission-panel">
         <div class="section__inner admission-panel">
@@ -1153,14 +1471,11 @@ function scrollToPageTop() {
         </div>
       </section>
 
+
       <section id="works" class="section section--works-board">
-        <canvas
-          id="works-gradient-canvas"
-          class="works-board__canvas"
-          data-transition-in
-          aria-hidden="true"
-        />
-        <div class="works-board__scrim" aria-hidden="true" />
+        <div id="vanta" ref="vantaRef" class="vanta-test" aria-hidden="true" />
+     
+
         <div class="works-board__backdrop" aria-hidden="true" />
         <div
           class="works-board__drag"
@@ -1171,48 +1486,11 @@ function scrollToPageTop() {
           @pointercancel="onWorksMarqueePointerCancel"
           @lostpointercapture="onWorksMarqueeLostPointerCapture"
         >
+             
           <div class="section__inner section__inner--works">
             <header class="works-board__heading">
               <h2 id="works-board-heading" class="works-board__title">{{ txt.works.title }}</h2>
-              <button
-                v-if="heroMotionOk"
-                type="button"
-                class="works-marquee-toggle"
-                :aria-pressed="worksMarqueePaused"
-                :aria-label="
-                  worksMarqueePaused ? txt.works.marqueePlayAria : txt.works.marqueePauseAria
-                "
-                @click="toggleWorksMarqueePause"
-                @pointerdown.stop
-              >
-              <span class="works-marquee-toggle__icon" aria-hidden="true">
-                <svg
-                  v-if="!worksMarqueePaused"
-                  class="works-marquee-toggle__svg"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <rect x="6" y="5" width="4" height="14" rx="1" />
-                  <rect x="14" y="5" width="4" height="14" rx="1" />
-                </svg>
-                <svg
-                  v-else
-                  class="works-marquee-toggle__svg works-marquee-toggle__svg--play"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M8 5v14l11-7L8 5z" />
-                </svg>
-              </span>
-              <span class="works-marquee-toggle__label">{{
-                worksMarqueePaused ? txt.works.marqueePlayLabel : txt.works.marqueePauseLabel
-              }}</span>
-            </button>
-          </header>
+            </header>
         </div>
         <div
           class="works-marquee-bleed"
@@ -1310,8 +1588,6 @@ function scrollToPageTop() {
     </main>
 
     <footer class="footer">
-      <canvas id="gradient-canvas" class="footer__canvas" data-transition-in aria-hidden="true" />
-      <div class="footer__scrim" aria-hidden="true" />
       <div class="footer__inner">
         <p>{{ txt.footer.organizer }}</p>
         <p><a href="mailto:info@urban-spectrum.art">{{ txt.footer.contact }}</a></p>
@@ -1371,33 +1647,9 @@ function scrollToPageTop() {
             />
           </svg>
         </a>
-
-        <hr class="social-rail__rule" />
-
-        <p class="social-rail__follow" :class="{ 'social-rail__follow--caps': lang === 'en' }">
-          {{ txt.social.followLabel }}
-        </p>
       </div>
 
       <div class="social-rail__extras">
-        <a
-          class="social-rail__link social-rail__link--minimal"
-          :href="txt.social.urls.email"
-          :aria-label="txt.social.email"
-          :title="txt.social.email"
-        >
-          <svg class="social-rail__icon social-rail__icon--stroke social-rail__icon--sm" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M4 6h16v12H4V6zm0 0 8 6 8-6"
-            />
-          </svg>
-        </a>
-
         <button
           type="button"
           class="social-rail__top"
@@ -1446,12 +1698,16 @@ function scrollToPageTop() {
           </header>
           <div class="works-detail__divider" aria-hidden="true" />
           <div class="works-detail__main">
-            <div class="works-detail__media">
-              <div
-                class="works-detail__carousel"
-                @touchstart.passive="onWorksDetailTouchStart"
-                @touchend="onWorksDetailTouchEnd"
-              >
+            <div
+              class="works-detail__media"
+              :class="{ 'works-detail__media--with-artists': worksDetailArtists.length > 0 }"
+            >
+              <div class="works-detail__gallery">
+                <div
+                  class="works-detail__carousel"
+                  @touchstart.passive="onWorksDetailTouchStart"
+                  @touchend="onWorksDetailTouchEnd"
+                >
                 <button
                   v-if="worksDetailGalleryUrls.length > 1"
                   type="button"
@@ -1460,13 +1716,17 @@ function scrollToPageTop() {
                   @click="worksDetailStepSlide(-1)"
                 />
                 <div class="works-detail__viewport">
-                  <img
-                    v-if="worksDetailCurrentImageSrc"
-                    :src="worksDetailCurrentImageSrc"
-                    :alt="worksDetailCard.title"
-                    class="works-detail__img"
-                    decoding="async"
-                  />
+                  <template v-if="worksDetailGalleryUrls.length">
+                    <img
+                      v-for="(url, si) in worksDetailGalleryUrls"
+                      :key="`${worksDetailIndex}-${si}-${url}`"
+                      :src="url"
+                      :alt="worksDetailCard.title"
+                      class="works-detail__img"
+                      :class="{ 'works-detail__img--active': worksDetailActiveSlideIx === si }"
+                      decoding="async"
+                    />
+                  </template>
                   <div v-else class="works-detail__placeholder" aria-hidden="true" />
                 </div>
                 <button
@@ -1490,8 +1750,29 @@ function scrollToPageTop() {
                   :class="{ 'works-detail__dot--active': worksDetailSlideIx === di }"
                   :aria-label="`${di + 1} / ${worksDetailGalleryUrls.length}`"
                   :aria-current="worksDetailSlideIx === di ? 'true' : undefined"
-                  @click="worksDetailSlideIx = di"
+                  @click="worksDetailGoToSlide(di)"
                 />
+              </div>
+              </div>
+              <div
+                v-if="worksDetailArtists.length"
+                class="works-detail__artists"
+                :aria-label="txt.works.detailArtistsAria"
+              >
+                <figure
+                  v-for="(artist, ai) in worksDetailArtists"
+                  :key="`artist-${ai}-${artist.name}`"
+                  class="works-detail__artist"
+                >
+                  <img
+                    :src="artist.photoUrl"
+                    :alt="artist.name"
+                    class="works-detail__artist-photo"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption class="works-detail__artist-name">{{ artist.name }}</figcaption>
+                </figure>
               </div>
             </div>
             <div class="works-detail__prose">
@@ -1521,12 +1802,28 @@ function scrollToPageTop() {
         </div>
       </div>
     </Teleport>
+
+    <canvas
+      id="mouse-trail-invert-canvas"
+      class="mouse-trail-invert-canvas"
+      aria-hidden="true"
+    />
+    <canvas
+      id="mouse-trail-text-canvas"
+      class="mouse-trail-text-canvas"
+      aria-hidden="true"
+    />
+    <canvas
+      id="mouse-trail-canvas"
+      class="mouse-trail-canvas"
+      aria-hidden="true"
+    />
   </div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..600&family=Noto+Sans+TC:wght@200..900&family=Playfair+Display:ital,wght@0,400..800;1,400..600&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..600&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@200..900&family=Playfair+Display:ital,wght@0,400..800;1,400..600&display=swap');
+@import url(//fonts.googleapis.com/earlyaccess/notosanstc.css);
 *,
 *::before,
 *::after {
@@ -1560,8 +1857,6 @@ function scrollToPageTop() {
   --page-bg-from: #121f66;
   --page-bg-to: #c46940;
   --schedule-map-seam: #1a3278;
-  /** 地圖區照片上的罩（請搭配 ::after alpha） */
-  --map-bg-scrim-alpha: 0.55;
   --map-corner-text: #eef2ff;
   /** 次要操作底上的字形 */
   --social-alt-fg: #e8eeff;
@@ -1578,6 +1873,9 @@ function scrollToPageTop() {
   --stripe-gradient-color-4: #0e1a5c;
   --font-display: 'Playfair Display', 'Noto Sans TC', serif;
   --font-body: 'Noto Sans TC', 'DM Sans', system-ui, sans-serif;
+  --font-ibm-plex-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-noto-sans-tc: 'Noto Sans TC', sans-serif;
+  --font-title: var(--font-ibm-plex-mono), var(--font-noto-sans-tc), Helvetica, sans-serif;
   /** 社群直欄 */
   --social-rail-pill: #1a2a7a;
   --social-rail-icon: #dce4ff;
@@ -1585,9 +1883,12 @@ function scrollToPageTop() {
   /** 較深藍面板 */
   --surface-raised: #243580;
   --surface-muted: rgb(var(--blue-rgb) / 0.45);
-  /** 淺色內容區（關於、場次卡、入場須知） */
+  /** 淺色內容區（作品卡等） */
   --surface-light: #faf8f4;
   --surface-light-hover: #fffdf8;
+  /** 場次、入場須知字卡：預設白底，hover 淺藍 */
+  --card-info-surface: #ffffff;
+  --card-info-surface-hover: #c1adff;
   --text-on-surface: #1a1f3d;
   /**
    * 導覽 scrollIntoView／錨點滾動時預留白：sticky header 高度＋微量呼吸空間，
@@ -1642,8 +1943,12 @@ a:hover {
   flex-direction: column;
 }
 
-/** 導覽 scrollIntoView 時留白，避免區塊主標題被 sticky header 切掉 */
-.page main > section[id] {
+
+/** 錨點滾動時留白，避免區塊主標題被 sticky header 切掉 */
+.page main > section[id] .section__head,
+.page main > section[id] .section__title,
+.page main > section[id] .admission-panel__title,
+.page main > section[id] .works-board__title {
   scroll-margin-top: var(--nav-anchor-offset);
 }
 
@@ -1678,7 +1983,7 @@ a:hover {
   padding: 1.45rem 0.55rem 1.55rem;
   min-width: 3.25rem;
   max-width: 3.6rem;
-  background: var(--social-rail-pill);
+  background:#9978ff;
   border-radius: 999px;
   box-shadow: 0 12px 40px rgb(var(--blue-rgb) / 0.35);
 }
@@ -1717,34 +2022,6 @@ a:hover {
 .social-rail__icon--sm {
   width: 21px;
   height: 21px;
-}
-
-.social-rail__rule {
-  width: 46%;
-  min-width: 1.65rem;
-  height: 1px;
-  margin: 0.2rem auto;
-  padding: 0;
-  border: none;
-  background: rgba(232, 228, 255, 0.12);
-}
-
-.social-rail__follow {
-  margin: 0.25rem 0 0;
-  padding: 0;
-  font-family: var(--font-body);
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.05;
-  color: var(--social-rail-icon);
-  letter-spacing: 0.06em;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-}
-
-.social-rail__follow--caps {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
 }
 
 .social-rail__extras {
@@ -1825,10 +2102,6 @@ a:hover {
     width: 23px;
     height: 23px;
   }
-
-  .social-rail__follow {
-    font-size: 0.62rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1838,65 +2111,36 @@ a:hover {
     transform: none;
   }
 }
-.footer__canvas#gradient-canvas {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  --gradient-color-1: var(--stripe-gradient-color-1);
-  --gradient-color-2: var(--stripe-gradient-color-2);
-  --gradient-color-3: var(--stripe-gradient-color-3);
-  --gradient-color-4: var(--stripe-gradient-color-4);
-}
-
-.footer__scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: rgb(var(--blue-rgb) / 0.4);
-}
-
-.footer__inner {
-  position: relative;
-  z-index: 2;
-}
 
 /* Header */
 .header {
   position: sticky;
   top: 0;
   z-index: 40;
-  background: color-mix(in srgb, var(--palette-blue-dim) 88%, #000);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .header__inner {
   position: relative;
-  max-width: 1120px;
+  max-width: none;
   margin: 0 auto;
-  padding: 0.85rem 1.25rem;
+  padding: 0.7rem clamp(1rem, 3vw, 2.5rem);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: clamp(0.65rem, 2.5vw, 1.15rem);
+  gap: clamp(1rem, 3vw, 2.5rem);
 }
 
 .header__end {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: clamp(0.85rem, 2vw, 1.35rem);
+  gap: clamp(1rem, 2.5vw, 2rem);
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/** 桌機：語切與漢堡與導覽同列；手機僅語切＋漢堡與 logo 左右對齊 */
 .header__tools {
   display: inline-flex;
   align-items: center;
@@ -1907,35 +2151,55 @@ a:hover {
 
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(0.55rem, 1.5vw, 0.85rem);
   text-decoration: none;
-  color: inherit;
+  color: #fff;
   flex-shrink: 0;
   min-width: 0;
 }
 
 .brand:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid #fff;
   outline-offset: 4px;
   border-radius: 4px;
 }
 
-.brand__logo {
+.brand__mark {
   display: block;
-  height: clamp(2rem, 5.2vw, 2.5rem);
-  width: auto;
-  max-width: min(260px, 52vw);
+  flex-shrink: 0;
+  width: clamp(4rem, 4.5vw, 2.65rem);
+  height: clamp(4rem, 4.5vw, 2.65rem);
   object-fit: contain;
-  object-position: left center;
+  object-position: center;
 }
 
-.brand__tag {
-  font-size: 0.7rem;
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.brand__eyebrow {
+  font-size: clamp(0.58rem, 1.1vw, 0.68rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--ink-soft);
-  opacity: 0.85;
+  color: #fff;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.brand__headline {
+  font-family: var(--font-title);
+  font-size: clamp(1.15rem, 2.4vw, 1.75rem);
+  font-weight: 400;
+  color: #fff;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .nav-toggle {
@@ -1979,7 +2243,6 @@ a:hover {
 .nav {
   display: flex;
   align-items: center;
-  gap: 1.35rem;
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
@@ -1989,7 +2252,8 @@ a:hover {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0.2rem clamp(0.35rem, 1.2vw, 0.6rem);
+  justify-content: flex-end;
+  gap: clamp(0.15rem, 1.2vw, 0.55rem);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1997,69 +2261,83 @@ a:hover {
 
 .nav__link {
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--ink-soft);
+  font-size: clamp(0.72rem, 1.1vw, 0.84rem);
+  font-weight: 400;
+  color: #fff;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.4rem 0.65rem;
-  border-radius: 6px;
-  transition: color 0.15s ease, background 0.15s ease;
+  padding: 0.3rem clamp(0.25rem, 0.8vw, 0.45rem);
+  border-radius: 0;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+  position: relative;
+  isolation: isolate;
 }
 
-.nav__link:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+.nav__link__label {
+  position: relative;
+  z-index: 1;
+  transition: color 0.15s ease;
+}
+
+.nav__link::before,
+.nav__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+/** 白層 difference：疊在文字上方，反相字色 */
+.nav__link::before {
+  z-index: 2;
+  background: #fff;
+  mix-blend-mode: difference;
+}
+
+/** 藍層 lighten：與滑鼠拖曳文字區一致 */
+.nav__link::after {
+  z-index: 3;
+  background: #1b2f9e;
+  mix-blend-mode: lighten;
+}
+
+.nav__link:hover::before,
+.nav__link:hover::after {
+  opacity: 1;
 }
 
 .nav__link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid #fff;
   outline-offset: 2px;
 }
 
-.lang {
-  display: inline-flex;
-  flex-shrink: 0;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--paper-tint);
-}
-
-.lang__btn {
+.lang__solo {
   font: inherit;
-  font-size: clamp(0.74rem, 1.05vw + 0.62rem, 0.8rem);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 0.38rem clamp(0.55rem, 1.8vw, 0.82rem);
-  border: none;
+  font-size: clamp(0.72rem, 1.1vw, 0.82rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  padding: 0.32rem 0.72rem;
+  border: 1px solid #fff;
+  border-radius: 4px;
   background: transparent;
-  color: var(--ink-soft);
+  color: #fff;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
 }
 
-.lang__btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.lang__btn--active {
+.lang__solo:hover {
   background: #fff;
-  color: var(--paper);
-  box-shadow: inset 0 0 0 1px rgba(232, 228, 255, 0.35);
+  color: #000;
 }
 
-.lang__btn--active:hover {
-  color: var(--paper);
-  background: #ebebf5;
-}
-
-.lang__btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  z-index: 1;
+.lang__solo:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 @media (max-width: 1100px) {
@@ -2069,10 +2347,18 @@ a:hover {
     padding: 0.65rem 1rem;
   }
 
-  /** 手機／窄螢幕文博會 logo 再小一級，釋出給右側工具列 */
-  .brand__logo {
-    height: clamp(1.32rem, 3.8vw, 1.65rem);
-    max-width: min(148px, 38vw);
+  .brand__mark {
+    width: clamp(1.65rem, 4vw, 2rem);
+    height: clamp(1.65rem, 4vw, 2rem);
+  }
+
+  .brand__eyebrow {
+    font-size: 0.52rem;
+    letter-spacing: 0.05em;
+  }
+
+  .brand__headline {
+    font-size: clamp(0.95rem, 3.8vw, 1.2rem);
   }
 
   .nav-toggle {
@@ -2125,18 +2411,11 @@ a:hover {
     text-align: left;
     padding: 0.72rem 0.4rem;
     font-size: 1rem;
-    border-radius: 8px;
+    border-radius: 0;
+    color: #fff;
   }
 
-  .lang {
-    flex-shrink: 0;
-  }
-
-  .header__tools {
-    gap: 0.4rem;
-  }
-
-  .lang__btn {
+  .lang__solo {
     padding: 0.32rem 0.58rem;
     font-size: 0.78rem;
     min-height: 38px;
@@ -2145,16 +2424,15 @@ a:hover {
     align-items: center;
     justify-content: center;
   }
+
+  .header__tools {
+    gap: 0.4rem;
+  }
 }
 
 @media (max-width: 520px) {
-  .brand__tag {
+  .brand__eyebrow {
     display: none;
-  }
-
-  .brand__logo {
-    height: 1.28rem;
-    max-width: min(122px, 50vw);
   }
 
   .nav-toggle {
@@ -2167,6 +2445,7 @@ a:hover {
 .hero {
   position: relative;
   isolation: isolate;
+  z-index: 1;
   width: 100%;
   max-width: none;
   margin: 0;
@@ -2177,7 +2456,7 @@ a:hover {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  background: var(--paper);
+  background: transparent;
 }
 
 .hero__photo {
@@ -2188,12 +2467,15 @@ a:hover {
   overflow: hidden;
 }
 
-.hero__photo-img {
+.hero__grid-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center;
+  pointer-events: none;
+  touch-action: none;
 }
 
 .hero__canvas {
@@ -2213,14 +2495,14 @@ a:hover {
 .hero__scrim {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   /** 與主視覺：靛藍→陶土橘→暖金（柔和過渡） */
   background: linear-gradient(
     to bottom,
-    rgb(var(--blue-rgb) / 0.45) 0%,
-    rgb(var(--orange-rgb) / 0.2) min(52%, calc(100% - 160px)),
-    rgb(var(--yellow-rgb) / 0.1) 100%
+    rgb(var(--blue-rgb) / 0.36) 0%,
+    rgb(var(--orange-rgb) / 0.16) min(52%, calc(100% - 160px)),
+    rgb(var(--yellow-rgb) / 0.07) 100%
   );
 }
 
@@ -2257,18 +2539,182 @@ a:hover {
 }
 
 .hero__inner {
-  position: relative;
+  position: absolute;
   z-index: 5;
+  inset: 0;
   width: 100%;
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: clamp(3.75rem, 10svh, 5.5rem) 1.25rem clamp(3.5rem, 8svh, 5rem);
+  max-width: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  flex: 1;
+  pointer-events: none;
+}
+
+.hero_title {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: clamp(1rem, 2.5vw, 1.75rem) 0 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.hero_title__stack {
+  position: relative;
+  width: 80%;
+  margin: 0 auto;
+}
+
+.hero_title__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) invert(1) drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
+}
+
+/** 對齊 title.svg 右緣；隨 .hero_title 視差上移 */
+.hero_logo {
+  position: absolute;
+  z-index: 1;
+  top: 41%;
+  right: 0;
+  left: auto;
+  width: clamp(40px, 20vw, 80px);
+  transform: none;
+  pointer-events: none;
+}
+
+.hero_logo__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
+}
+
+.hero_title-bottom {
+  position: absolute;
+  z-index: 5;
+  bottom: 10%;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0 0 max(1rem, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.hero_title-bottom__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) invert(1) drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
+}
+
+
+/** 首屏字卡（螢光綠＋黃色像素飾塊） */
+.hero__card {
+  position: relative;
+  width: min(100%, 34rem);
+  flex-shrink: 0;
+  margin-left: clamp(-0.35rem, -1.8vw, -1.1rem);
+  transform: translateY(clamp(-0.5rem, -1.5vh, -1rem));
+}
+
+.hero__card-green {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1rem, 2.5vw, 1.35rem) clamp(1rem, 3vw, 1.5rem) clamp(2.5rem, 6vw, 3.25rem);
+  background: transparent;
+  color: #ffff;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 40%,
+    86% 40%,
+    86% 68%,
+    72% 68%,
+    72% 100%,
+    0 100%
+  );
+}
+
+.hero__card-body {
+  position: relative;
+}
+
+.hero__card-zh {
+  margin: 0 0 0.85rem;
+  font-size: clamp(0.82rem, 1.8vw, 0.95rem);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+.hero__card-en {
+  margin: 0 0 1.35rem;
+  font-family: var(--font-body);
+  font-size: clamp(1.35rem, 3.8vw, 2rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.hero__card-en span {
+  display: block;
+}
+
+.hero__card-date {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0;
+  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+.hero__card-date-square {
+  display: block;
+  flex-shrink: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: -0.72rem;
+  margin-right: 0.15rem;
+  background: #000;
+}
+
+.hero__card-accent {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: clamp(5.25rem, 20vw, 7rem);
+  height: clamp(3.75rem, 14vw, 5rem);
+  background: #ffe800;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0.35rem 0.4rem 0.3rem 0.3rem;
+}
+
+.hero__card-pixels {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.hero__inner .hero__cta-btn {
+  pointer-events: auto;
 }
 
 .hero__kicker {
@@ -2298,6 +2744,58 @@ a:hover {
   position: relative;
   z-index: 1;
   align-self: center;
+}
+
+/** 查看場次 CTA：同心波紋擴散 */
+.hero__cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.hero__cta-ripple {
+  position: absolute;
+  inset: -1.1rem;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero__cta-ripple__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  box-shadow: 0 0 0 1px rgb(var(--yellow-rgb) / 0.12);
+  opacity: 0;
+  animation: hero-cta-ripple 2.9s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.hero__cta-ripple__ring:nth-child(2) {
+  animation-delay: 0.95s;
+}
+
+.hero__cta-ripple__ring:nth-child(3) {
+  animation-delay: 1.9s;
+}
+
+@keyframes hero-cta-ripple {
+  0% {
+    transform: scale(0.82);
+    opacity: 0.62;
+  }
+  75%,
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
+.hero__cta-btn {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .hero__title-main {
@@ -2372,10 +2870,12 @@ a:hover {
   padding: 4rem 1.25rem;
 }
 
-/** 入場須知：黑底、白底黑字字卡 */
+/** 入場須知：白底、淺色字卡 */
 .section--admission-panel {
   position: relative;
-  background-color: #000;
+  background: #fff;
+  color: var(--text-on-surface);
+  padding-bottom: clamp(6rem, 14vh, 9rem);
 }
 
 .section--admission-panel > .section__inner {
@@ -2384,13 +2884,13 @@ a:hover {
 
 .admission-panel__title {
   margin: 0 auto 1.35rem;
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: clamp(1.65rem, 4vw, 2.25rem);
-  line-height: 1.18;
-  color: var(--section-heading-terracotta);
-  padding-bottom: 0.42rem;
-  border-bottom: 1px solid rgb(var(--yellow-rgb) / 0.28);
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: clamp(32px, 2.5vw, 72px);
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: var(--text-on-light);
+  padding-bottom: 0;
   width: 100%;
   max-width: 100%;
   text-align: center;
@@ -2414,7 +2914,7 @@ a:hover {
   cursor: pointer;
   padding: 0.62rem 1rem;
   min-height: 2.75rem;
-  color: var(--ink);
+  color: var(--palette-blue);
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -2432,18 +2932,18 @@ a:hover {
 }
 
 .admission-panel__tab[aria-selected='true'] {
-  background: #fff;
-  color: var(--paper);
+  background: #9978ff;
+  color: #fff;
 }
 
 .admission-panel__tab:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--palette-blue);
+  background: rgb(var(--blue-rgb) / 0.08);
 }
 
 .admission-panel__tab[aria-selected='true']:hover {
-  color: var(--paper);
-  background: #ebebf5;
+  color: #fff;
+  background: #8a66f5;
 }
 
 .admission-panel-fade-enter-active,
@@ -2481,12 +2981,24 @@ a:hover {
   align-items: start;
   margin: 0;
   padding: 1rem 1.15rem;
-  background: var(--surface-light);
+  background: var(--card-info-surface);
   border: 1px solid rgb(var(--blue-rgb) / 0.12);
   border-radius: 12px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 6px 22px rgb(var(--blue-rgb) / 0.1);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admission-panel__card:hover {
+  background: var(--card-info-surface-hover);
+  border-color: rgb(var(--blue-rgb) / 0.2);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 8px 26px rgb(var(--blue-rgb) / 0.14);
 }
 
 .admission-panel__num {
@@ -2854,10 +3366,24 @@ a:hover {
   }
 }
 
-/** 關於我們：暖白底＋深靛內文 */
+/** 關於我們：白底；負 margin 疊在 banner 底，視差以 marginTop 上拉（避免 transform 縫隙） */
 .section--about {
-  background: var(--surface-light);
+  position: relative;
+  z-index: 2;
+  margin-top: clamp(-7rem, -16vh, -3.5rem);
+  background: #fff;
   color: var(--text-on-surface);
+}
+
+.section--about::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 6px;
+  background: #fff;
+  pointer-events: none;
 }
 
 .section--about .section__title {
@@ -2871,17 +3397,30 @@ a:hover {
 .about-block__head {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: start;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
+  gap: 0.15rem 1.25rem;
   margin-bottom: 1.25rem;
   text-align: center;
 }
 
+.about_title {
+  margin-bottom:0.2em;
+  color:#69419b;
+  padding: 0;
+}
+
+.about_title h1 {
+  margin: 0;
+  line-height: 1.1;
+  font-family: var(--font-title);
+}
+
 .about-block__title {
-  margin: 0 0 0.5rem;
+  margin: 0 0 1rem;
   width: 100%;
+  line-height: 1.5;
 }
 
 .about-block__more {
@@ -2929,69 +3468,55 @@ a:hover {
   margin-bottom: 0;
 }
 
-/** 場次表：由上往下 藍→青→黃 漸層＋白底字卡 */
+/** 場次表：白底＋字卡；與關於我們重疊 1px，消除捲動時底部細線 */
 .section--schedule-grad {
-  background: linear-gradient(
-    to bottom,
-    var(--schedule-grad-from) 0%,
-    color-mix(in srgb, var(--schedule-grad-from) 30%, var(--schedule-grad-mid)) 28%,
-    var(--schedule-grad-mid) 52%,
-    color-mix(in srgb, var(--schedule-grad-mid) 35%, var(--schedule-grad-to)) 78%,
-    var(--schedule-grad-to) 100%
-  );
+  position: relative;
+  z-index: 1;
+  margin-top: -1px;
+  padding-top: calc(4rem + 1px);
+  background: #fff;
 }
 
-/** 地圖區：aboutus.jpeg 襯底＋淺色罩以利標題／內容可讀 */
+.section__inner--schedule {
+  max-width: 960px;
+}
+
+.section--schedule-grad .section__title {
+  color: var(--text-on-light);
+}
+
+/** 地圖區：白底 */
 .section--map-grad {
   position: relative;
-  isolation: isolate;
-  background-color: var(--schedule-map-seam);
-}
-
-.section--map-grad::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-image: url('/aboutus.jpeg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  pointer-events: none;
-}
-
-.section--map-grad::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: rgb(var(--blue-rgb) / calc(var(--map-bg-scrim-alpha) * 0.92));
+  background: #fff;
+  color: var(--text-on-surface);
 }
 
 .section--map-grad > .section__inner {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 
 #map.section--map-grad {
   margin-top: -1px;
   padding-top: calc(4rem + 1px);
+  overflow: hidden;
 }
 
-/** 作品介紹：動態 canvas 底＋半透明罩＋輯紋／三欄卡 */
+.section--map-grad .section__title {
+  color: var(--text-on-light);
+}
+
+
+
+/** 作品介紹：Vanta CLOUDS 滿版底 */
 .section--works-board {
   position: relative;
   isolation: isolate;
-  background: linear-gradient(
-    180deg,
-    var(--palette-blue) 0%,
-    color-mix(in srgb, var(--palette-blue) 35%, var(--palette-orange)) 38%,
-    var(--palette-orange) 72%,
-    color-mix(in srgb, var(--palette-orange) 40%, var(--palette-yellow)) 88%,
-    var(--palette-yellow) 100%
-  );
+  background: transparent;
   overflow: hidden;
+  /** 底部多留空間，讓雲層動態更明顯 */
+  padding-bottom: clamp(13rem, 38vh, 24rem);
   /**
    * hover 陰影最大層約 0 38px 88px blur，底部可見尾很長；供子層 .works-marquee-bleed 繼承。
    */
@@ -2999,26 +3524,22 @@ a:hover {
   --works-marquee-shadow-room-b: clamp(5rem, 18vmin, 9rem);
 }
 
-.works-board__canvas {
+/** 作品區 Vanta 背景層（#vanta / .vanta-test） */
+.section--works-board .vanta-test {
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: block;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   pointer-events: none;
-  --gradient-color-1: var(--stripe-gradient-color-1);
-  --gradient-color-2: var(--stripe-gradient-color-2);
-  --gradient-color-3: var(--stripe-gradient-color-3);
-  --gradient-color-4: var(--stripe-gradient-color-4);
 }
 
-.works-board__scrim {
+.vanta-test .vanta-canvas {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: rgb(var(--blue-rgb) / 0.32);
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .works-board__backdrop {
@@ -3063,60 +3584,13 @@ a:hover {
 }
 
 .works-board__title {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: clamp(1.85rem, 4.2vw, 2.5rem);
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: clamp(32px, 2.5vw, 72px);
+  line-height: 1.35;
   letter-spacing: 0.02em;
   margin: 0;
   color: var(--section-heading-terracotta);
-}
-
-.works-marquee-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 1rem 0.5rem;
-  margin: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgb(var(--blue-rgb) / 0.48);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease,
-    color 0.2s ease;
-}
-
-.works-marquee-toggle:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.55);
-  background: rgb(var(--blue-rgb) / 0.62);
-}
-
-.works-marquee-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.works-marquee-toggle__icon {
-  display: inline-flex;
-  line-height: 0;
-}
-
-.works-marquee-toggle__svg {
-  display: block;
-}
-
-.works-marquee-toggle__svg--play {
-  margin-left: 2px;
 }
 
 .works-marquee-bleed {
@@ -3298,7 +3772,9 @@ a:hover {
 .works-detail {
   position: relative;
   width: min(100%, 52rem);
-  max-height: min(92vh, 900px);
+  --works-detail-height: min(88vh, 840px);
+  height: var(--works-detail-height);
+  max-height: var(--works-detail-height);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3329,7 +3805,7 @@ a:hover {
 .works-detail__heading {
   margin: 0;
   padding: 0 2.85rem;
-  font-family: var(--font-body);
+  font-family: var(--font-title);
   font-size: clamp(1.1rem, 2.8vw, 1.35rem);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -3362,40 +3838,94 @@ a:hover {
 .works-detail__media {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
   align-self: stretch;
 }
 
+.works-detail__gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/**
+ * 有藝術家照片時：作品圖與藝術家圖上下堆疊、各約半寬正方形；
+ * 多位藝術家時左側媒體區可上下捲動，避免重疊。
+ */
+.works-detail__media--with-artists {
+  gap: 0.75rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.works-detail__media--with-artists .works-detail__gallery {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.works-detail__media--with-artists .works-detail__carousel {
+  flex: 0 0 auto;
+  min-height: auto;
+  container-type: normal;
+}
+
+.works-detail__media--with-artists .works-detail__viewport {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
 .works-detail__carousel {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
 }
 
 .works-detail__viewport {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  max-height: min(64vh, 560px);
+  position: relative;
+  flex: 0 0 auto;
+  width: min(100%, 100cqw, 100cqh);
   aspect-ratio: 1 / 1;
+  height: auto;
+  align-self: center;
+  margin: 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: linear-gradient(
-    145deg,
-    var(--palette-blue) 0%,
-    var(--palette-orange) 62%,
-    var(--palette-yellow) 100%
-  );
+  background: #1a1f3d;
+  isolation: isolate;
 }
 
 .works-detail__img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.works-detail__img--active {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .works-detail__placeholder {
@@ -3453,6 +3983,10 @@ a:hover {
 }
 
 .works-detail__arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
   flex-shrink: 0;
   width: 2.25rem;
   height: 2.25rem;
@@ -3460,7 +3994,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--text-on-light);
   cursor: pointer;
   font-size: 1.35rem;
@@ -3479,6 +4013,7 @@ a:hover {
   color: var(--palette-blue-dim);
   background: var(--surface-light-hover);
   border-color: rgba(255, 255, 255, 0.85);
+  transform: translateY(-50%) scale(1.05);
 }
 
 .works-detail__arrow:focus-visible {
@@ -3486,10 +4021,18 @@ a:hover {
   outline-offset: 2px;
 }
 
+.works-detail__arrow--prev {
+  left: 0.45rem;
+}
+
 .works-detail__arrow--prev::after {
   content: '‹';
   display: block;
   transform: translateX(-1px);
+}
+
+.works-detail__arrow--next {
+  right: 0.45rem;
 }
 
 .works-detail__arrow--next::after {
@@ -3505,6 +4048,7 @@ a:hover {
   gap: 0.4rem;
   margin: 0;
   padding: 0;
+  flex-shrink: 0;
 }
 
 .works-detail__dot {
@@ -3538,11 +4082,58 @@ a:hover {
   outline-offset: 2px;
 }
 
+.works-detail__artists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
+  align-items: start;
+  gap: 0.75rem 0.85rem;
+  flex: 0 0 auto;
+  min-height: auto;
+  width: 100%;
+}
+
+.works-detail__artist {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.works-detail__artist-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  object-fit: cover;
+  object-position: center top;
+  border: 2px solid rgb(var(--blue-rgb) / 0.18);
+  box-shadow: 0 4px 14px rgb(var(--blue-rgb) / 0.14);
+  background: #e8ecf8;
+}
+
+.works-detail__artists:has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.works-detail__artist-name {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text-on-light);
+  max-width: 100%;
+}
+
 .works-detail__prose {
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  max-height: 100%;
+  align-self: stretch;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -3593,37 +4184,129 @@ a:hover {
 }
 
 @media (max-width: 840px) {
+  .works-detail-scrim {
+    align-items: center;
+    padding: 0.75rem;
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .works-detail {
+    width: min(100%, 28rem);
+    --works-detail-height: min(92dvh, 100%);
+  }
+
+  .works-detail__header {
+    padding: 0.95rem 1rem 0.85rem;
+  }
+
+  .works-detail__heading {
+    padding: 0 2.5rem;
+    font-size: 1.1rem;
+  }
+
+  /** 手機：圖在上、文在下 */
   .works-detail__main {
     display: flex;
     flex-direction: column;
-    grid-template-columns: unset;
-    gap: 1.25rem;
-    padding: 1.15rem 1rem 1.35rem;
+    gap: 1rem;
+    padding: 0 1rem 1.15rem;
     overflow: hidden;
   }
 
-  .works-detail__viewport {
-    min-height: min(52vh, 440px);
-    max-height: min(52vh, 480px);
-    margin: 0 auto;
+  .works-detail__media {
+    flex: 0 0 auto;
+    order: 1;
     width: 100%;
-    max-width: min(100%, 28rem);
+    height: auto;
+  }
+
+  .works-detail__media--with-artists {
+    width: 100%;
+    height: auto;
+    max-height: min(58vh, 28rem);
   }
 
   .works-detail__prose {
     flex: 1 1 auto;
-    min-height: 12rem;
-    max-height: min(38vh, 340px);
-    height: auto;
-    padding-right: 0.25rem;
-  }
-
-  .works-detail__arrow {
-    display: none;
+    order: 2;
+    min-height: 0;
+    padding-right: 0;
   }
 
   .works-detail__carousel {
+    flex: 0 0 auto;
+    width: 100%;
+    container-type: normal;
     gap: 0;
+  }
+
+  .works-detail__viewport {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .works-detail__artists {
+    gap: 0.65rem 0.75rem;
+  }
+
+  .works-detail__artist-name {
+    font-size: 0.72rem;
+  }
+
+  .works-detail__arrow {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.2rem;
+  }
+
+  .works-detail__arrow--prev {
+    left: 0.35rem;
+  }
+
+  .works-detail__arrow--next {
+    right: 0.35rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .works-detail-scrim {
+    padding: 0.5rem;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .works-detail {
+    width: 100%;
+    --works-detail-height: min(96dvh, 100%);
+    border-radius: 10px;
+  }
+
+  .works-detail__header {
+    padding: 0.85rem 0.85rem 0.75rem;
+  }
+
+  .works-detail__heading {
+    font-size: 1.05rem;
+    padding: 0 2.35rem;
+  }
+
+  .works-detail__main {
+    gap: 0.85rem;
+    padding: 0 0.85rem 1rem;
+  }
+
+  .works-detail__prose {
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+
+  .works-detail__subheading {
+    font-size: 1rem;
+    text-align: left;
   }
 }
 
@@ -3637,21 +4320,24 @@ a:hover {
 }
 
 .section__title {
-  font-family: var(--font-display);
+  width:fit-content;
+  font-family: var(--font-title);
   font-weight: 600;
-  font-size: clamp(1.65rem, 4vw, 2.25rem);
+  font-size: clamp(32px, 2.5vw, 72px);
   margin: 0 0 1.5rem;
-  line-height: 1.15;
-  color: var(--section-heading-terracotta);
-  text-align: center;
+  line-height: 1.35;
+  color: #000;
+  text-align: left;
+  letter-spacing: 0.02em;
+ 
 }
 
 .section__head {
   display: flex;
   flex-wrap: wrap;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items:center;
+  justify-content:center;
   gap: 0.5rem 1.5rem;
   margin-bottom: 2rem;
   text-align: center;
@@ -3677,136 +4363,7 @@ a:hover {
   margin-bottom: 0;
 }
 
-.schedule-cards {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.schedule-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 220px) 1fr;
-  gap: 1rem 1.75rem;
-  align-items: center;
-  padding: 1.2rem 1.35rem;
-  isolation: isolate;
-  border-radius: 14px;
-  border: 1px solid rgb(var(--blue-rgb) / 0.22);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.92) inset,
-    0 6px 24px rgb(var(--blue-rgb) / 0.18);
-  background: var(--surface-light);
-  color: var(--on-accent);
-  opacity: 0;
-  transition:
-    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .schedule-card {
-    background: var(--surface-light);
-    border-color: rgb(var(--blue-rgb) / 0.28);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.95) inset,
-      0 8px 28px rgb(var(--blue-rgb) / 0.16);
-  }
-}
-
-.schedule-card--from-left:not(.schedule-card--visible) {
-  transform: translateX(clamp(-3rem, -6vw, -1.5rem));
-}
-
-.schedule-card--from-right:not(.schedule-card--visible) {
-  transform: translateX(clamp(1.5rem, 6vw, 3rem));
-}
-
-.schedule-card--from-left.schedule-card--visible,
-.schedule-card--from-right.schedule-card--visible {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-/** 個別字卡 hover：僅該卡略往右上浮起 */
-.schedule-card--from-left.schedule-card--visible:hover,
-.schedule-card--from-right.schedule-card--visible:hover {
-  transform: translate(3px, -3px);
-}
-
-.schedule-card:hover {
-  border-color: rgb(var(--orange-rgb) / 0.42);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.96) inset,
-    0 12px 32px rgb(var(--blue-rgb) / 0.2),
-    0 18px 44px rgb(var(--orange-rgb) / 0.14);
-  background: var(--surface-light-hover);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .schedule-card:hover {
-    background: var(--surface-light-hover);
-    border-color: rgb(var(--orange-rgb) / 0.38);
-  }
-}
-
-.schedule-card__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 10px;
-  /* background: var(--accent-soft); */
-  /* border: 1px solid rgba(184, 134, 11, 0.18); */
-}
-
-.schedule-card__day {
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-  color: var(--on-accent);
-}
-
-.schedule-card__time {
-  font-size: 0.82rem;
-  color: var(--text-on-light);
-}
-
-.schedule-card__name {
-  margin: 0;
-  font-size: clamp(1rem, 2.2vw, 1.08rem);
-  font-weight: 600;
-  line-height: 1.45;
-  color: var(--on-accent);
-}
-
-@media (max-width: 640px) {
-  .schedule-card {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-    align-items: start;
-  }
-
-  .schedule-card__meta {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.5rem 1rem;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .schedule-card {
-    opacity: 1;
-    transform: none;
-    transition: box-shadow 0.2s ease;
-  }
-
   .admission-panel-fade-enter-active,
   .admission-panel-fade-leave-active {
     transition-duration: 0.01ms;
@@ -3815,11 +4372,11 @@ a:hover {
 }
 
 .map__hint {
-  margin: -0.5rem auto 1.25rem;
   font-size: 0.92rem;
-  color: var(--ink-soft);
+  color: var(--text-on-surface);
+  opacity: 0.85;
   max-width: 52ch;
-  text-align: center;
+  text-align: left;
 }
 
 .map-area {
@@ -3836,21 +4393,13 @@ a:hover {
   padding: 2.25rem 1.25rem 2.75rem;
   text-align: center;
   font-size: 0.88rem;
-  color: var(--ink-soft);
-  border-top: 1px solid var(--line);
+  color: rgb(255 255 255 / 0.82);
+  border-top: 1px solid rgb(255 255 255 / 0.12);
   margin-top: auto;
-  background: transparent;
+  background: #000;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .footer__canvas {
-    display: none !important;
-  }
-
-  .footer__scrim {
-    display: none !important;
-  }
-
   .hero__canvas {
     display: none !important;
   }
@@ -3859,20 +4408,17 @@ a:hover {
     display: none !important;
   }
 
-  .works-board__canvas {
+  .hero__grid-canvas {
     display: none !important;
   }
 
-  .works-board__scrim {
-    display: none !important;
+  .hero__cta-ripple__ring {
+    animation: none !important;
+    opacity: 0 !important;
   }
 
   .footer {
-    background: linear-gradient(
-      180deg,
-      var(--page-bg-from) 0%,
-      color-mix(in srgb, var(--page-bg-to) 88%, var(--page-bg-from)) 100%
-    );
+    background: #000;
   }
 
   .work-card {
@@ -3884,11 +4430,17 @@ a:hover {
   }
 }
 
+.footer__inner {
+  position: relative;
+  color: #fff;
+}
+
 .footer p {
   margin: 0.35rem 0;
 }
 
 .footer a {
+  color: rgb(255 255 255 / 0.9);
   text-decoration: none;
 }
 
@@ -3901,5 +4453,41 @@ a:hover {
   opacity: 0.75;
   margin-top: 1rem !important;
   font-size: 0.8rem;
+}
+
+
+/** 文字區下層：白方塊 + difference → 字變白 */
+.mouse-trail-invert-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 60;
+  pointer-events: none;
+  background: transparent;
+  mix-blend-mode: difference;
+}
+
+/** 文字區中層：藍方塊 #1b2f9e + lighten → 填滿方塊底色 */
+.mouse-trail-text-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 61;
+  pointer-events: none;
+  background: transparent;
+  mix-blend-mode: lighten;
+}
+
+/** 上層：一般區域紫色方塊 #9978ff */
+.mouse-trail-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 62;
+  pointer-events: none;
+  background: transparent;
 }
 </style>

@@ -1,9 +1,148 @@
 export type Lang = 'zh' | 'en'
 
+/** 8/1、8/2、8/21、8/28 共用同一組節目 */
+const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-28'] as const
+
+const zhAugSharedPrograms = [
+  { name: '萬象之初', creator: '浮點設計', duration: '3 mins', region: '臺灣' },
+  { name: '角鯨之殤', creator: '張簡長倫', duration: '10 mins', region: '臺灣' },
+  { name: '入岫：穹頂', creator: '李宸安、鄭乃銓', duration: '9 mins', region: '臺灣' },
+  {
+    name: '油井之殤：鯨落4993尺',
+    creator: '陳蘇楊、洗筱然、盧德昕',
+    duration: '13 mins',
+    region: '臺灣',
+  },
+  {
+    name: 'SAT Fest 2026作品精選',
+    creator: '加拿大 SAT科技藝術中心 / Hubblo',
+    duration: '25 mins',
+    region: '加拿大等',
+  },
+] as const
+
+const enAugSharedPrograms = [
+  { name: 'Genesis of All Things', creator: 'Floating Point Design', duration: '3 mins', region: 'Taiwan' },
+  { name: 'The Loss of Right Whale', creator: 'Chang Chien-Lun', duration: '10 mins', region: 'Taiwan' },
+  {
+    name: 'Into the Mountain: Dome',
+    creator: 'Lee Chen-An, Cheng Nai-Chuan',
+    duration: '9 mins',
+    region: 'Taiwan',
+  },
+  {
+    name: 'Death of Oil Well: Whale Fall 4993 ft',
+    creator: 'Chen Su-Yang, Xi Xiao-Ran, Lu De-Xin',
+    duration: '13 mins',
+    region: 'Taiwan',
+  },
+  {
+    name: 'SAT Fest 2026 Highlights',
+    creator: 'SAT Montréal / Hubblo',
+    duration: '25 mins',
+    region: 'Canada, etc.',
+  },
+] as const
+
+/** 8/7、8/8、8/9、8/22、8/29 共用同一組節目（節目二） */
+const AUG_SET_B_DATES = [
+  '2026-08-07',
+  '2026-08-08',
+  '2026-08-09',
+  '2026-08-22',
+  '2026-08-29',
+] as const
+
+const zhAugSetBPrograms = [
+  { name: '幻幕', creator: '葉澈', duration: '3 mins', region: '臺灣' },
+  { name: '誤差追獵', creator: '魏廷宇', duration: '12 mins', region: '臺灣' },
+  { name: '光所到之處', creator: '謝鎮璘', duration: '5 mins', region: '臺灣' },
+  { name: '意識之維', creator: 'MONOCOLOR', duration: '15 mins', region: '奧地利' },
+  { name: '時間層理', creator: '吳秉聖、劉承杰', duration: '22 mins', region: '臺灣' },
+] as const
+
+const enAugSetBPrograms = [
+  { name: 'Phantom Veil', creator: 'Ye Che', duration: '3 mins', region: 'Taiwan' },
+  { name: 'Deviation Hunt', creator: 'Wei Ting-Yu', duration: '12 mins', region: 'Taiwan' },
+  { name: 'Where Light Reaches', creator: 'Hsieh Chen-Lin', duration: '5 mins', region: 'Taiwan' },
+  { name: 'Dimension of Consciousness', creator: 'MONOCOLOR', duration: '15 mins', region: 'Austria' },
+  {
+    name: 'Stratigraphy of Time',
+    creator: 'Wu Ping-Sheng, Liu Cheng-Jie',
+    duration: '22 mins',
+    region: 'Taiwan',
+  },
+] as const
+
+/** 8/14、8/15、8/16、8/30 共用同一組節目（節目三） */
+const AUG_SET_C_DATES = [
+  '2026-08-14',
+  '2026-08-15',
+  '2026-08-16',
+  '2026-08-30',
+] as const
+
+const zhAugSetCPrograms = [
+  { name: '第二自然', creator: '吳克軍 x 林柏勳', duration: '3 mins', region: '臺灣' },
+  {
+    name: '循鹿',
+    creator: '桑德琳．德米耶、拉爾夫．基爾赫茲',
+    duration: '12 mins',
+    region: '法國、西班牙',
+  },
+  { name: '影像雜技', creator: '莊禾 x 蕭禹琦', duration: '10 mins', region: '臺灣' },
+  {
+    name: '新摩登時代',
+    creator: '初未來 x 超維度 x 江戶未來世 x Kivi x 賴皮 x 林強',
+    duration: '20 mins',
+    region: '臺灣',
+  },
+  {
+    name: '虛迷山',
+    creator: '姚瑞中、郭一、Meuko! Meuko!',
+    duration: '12 mins',
+    region: '臺灣',
+  },
+] as const
+
+const enAugSetCPrograms = [
+  { name: 'Second Nature', creator: 'Wu Ke-Jun x Lin Po-Hsun', duration: '3 mins', region: 'Taiwan' },
+  {
+    name: 'Following the Deer',
+    creator: 'Sandrine Deumier, Ralph Killhertz',
+    duration: '12 mins',
+    region: 'France, Spain',
+  },
+  { name: 'Visual Acrobatics', creator: 'Chuang He x Hsiao Yu-Chi', duration: '10 mins', region: 'Taiwan' },
+  {
+    name: 'New Modern Times',
+    creator: 'Chu Future x Hyper Dimension x Edo Miraiyo x Kivi x Lai Pi x Lim Giong',
+    duration: '20 mins',
+    region: 'Taiwan',
+  },
+  {
+    name: 'Mount Ecstasy',
+    creator: 'Yao Jui-Chung, Kuo Yi, Meuko! Meuko!',
+    duration: '12 mins',
+    region: 'Taiwan',
+  },
+] as const
+
+/** 8/23 節目四 */
+const AUG_SET_D_DATES = ['2026-08-23'] as const
+
+const zhAugSetDPrograms = [
+  { name: '現場 A/VJ', creator: '魏廷宇、TBD', duration: '50 mins', region: '臺灣' },
+] as const
+
+const enAugSetDPrograms = [
+  { name: 'Live A/VJ', creator: 'Wei Ting-Yu, TBD', duration: '50 mins', region: 'Taiwan' },
+] as const
+
 export const messages = {
   zh: {
-    siteName: '2026台灣文博會',
-    siteTagline: '臺灣文化創意博覽會',
+    siteName: '2026晴空季',
+    siteTagline: '臺灣文博會 CREATIVE EXPO TAIWAN 2026',
     nav: {
       admission: '入場須知',
       about: '關於我們',
@@ -16,6 +155,13 @@ export const messages = {
       title: '台灣文博會',
       subtitle: '藝術節',
       cta: '查看場次',
+      card: {
+        ariaLabel: '活動資訊',
+        zhLine: '空總臺灣當代文化實驗場 - 古蹟大樓',
+        enLine1: 'Taiwan Contemporary Culture Lab -',
+        enLine2: 'Building',
+        date: '08.01 [六] — 8.31 [一]',
+      },
     },
     admission: {
       title: '入場須知',
@@ -38,11 +184,13 @@ export const messages = {
     },
     about: {
       title: '關於我們',
-      body: `臺灣文化創意博覽會（以下簡稱臺灣文博會）自 2010 年起由文化部策辦，歷經多次重要策略轉型，展會規模與內容量能持續擴展，逐步發展為臺灣文化創意內容展示、產業交流與市場媒合的重要交易平台之一，並朝向以文化價值帶動市場經濟動能的國家級文化創意產業交易樞紐邁進。`,
-      officialAboutUrl: 'https://creativexpo.tw/zh-TW/about',
+      body: `自2020年起，C-LAB 未來視覺實驗室持續推動實驗展演計畫「FUTURE VISION LAB」，並以數位實驗建築為起點，打造穹形場域（DOME），持續探索科技媒體的視覺極限，過去六年已進行超過兩百件作品展演。2023年，在文化部支持下完成軟硬體升級，打造直徑15公尺、全臺唯一的巨型移動式戶外沉浸體驗空間「C-LAB穹頂劇場」。沉浸影像投影系統總運算可達 8K × 8K 超高解析度，並克服球形曲面投影在校正、融接、對位、播放控制與影像前製等多重技術挑戰。場域採雙層結構設計，搭配客製透聲投影膜片與25.4聲道環繞聲場環境，打造高規格沉浸式體驗。未來視覺實驗室持續優化穹形場域之創作環境，並向國際標準接軌，展現臺灣在科技藝術領域的創作能量。
+
+「FUTURE VISION LAB 2026」將自 2026年4月18日至6月7日，連續8個週末登場，匯集來自臺灣、法國、西班牙、匈牙利、奧地利、韓國、日本、美國與加拿大等各地精彩作品，共呈現19件作品、16檔節目。透過展覽、播映與現場 Live 演出等多元形式，在跨國創作的交會之中，邀請觀眾走入C-LAB穹頂劇場，沉浸於多元文化交織的感官體驗。`,
+      officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
       moreLabel: '瞭解更多',
       officialAboutAria:
-        '開啟臺灣文博會官方網站「關於」頁（另開新分頁）',
+        '開啟 FUTURE VISION LAB 2026 官方網站（另開新分頁）',
     },
     /** 「關於我們」上方：滑鼠／觸控位置會改變漸層高光範圍 */
     aboutGlow: {
@@ -52,11 +200,45 @@ export const messages = {
     schedule: {
       title: '場次',
       note: '* 實際節目以現場公告為準',
+      emptyDay: '本日無節目',
+      weekdays: ['日', '一', '二', '三', '四', '五', '六'],
+      eventDates: [
+        '2026-08-01',
+        '2026-08-02',
+        '2026-08-07',
+        '2026-08-08',
+        '2026-08-09',
+        '2026-08-14',
+        '2026-08-15',
+        '2026-08-16',
+        '2026-08-21',
+        '2026-08-22',
+        '2026-08-23',
+        '2026-08-28',
+        '2026-08-29',
+        '2026-08-30',
+      ],
       slots: [
-        { day: '5/15（四）', time: '11:00–20:00', name: '開幕日／策展導覽 14:00' },
-        { day: '5/16（五）', time: '11:00–20:00', name: '藝術家對談：城市與感官 16:30' },
-        { day: '5/17（六）', time: '10:00–21:00', name: '夜間場次／聲音演出 19:30' },
-        { day: '5/18（日）', time: '10:00–18:00', name: '親子工作坊 11:00、15:00' },
+        ...AUG_SHARED_DATES.map((date) => ({
+          date,
+          name: '節目一',
+          items: zhAugSharedPrograms,
+        })),
+        ...AUG_SET_B_DATES.map((date) => ({
+          date,
+          name: '節目二',
+          items: zhAugSetBPrograms,
+        })),
+        ...AUG_SET_C_DATES.map((date) => ({
+          date,
+          name: '節目三',
+          items: zhAugSetCPrograms,
+        })),
+        ...AUG_SET_D_DATES.map((date) => ({
+          date,
+          name: '節目四',
+          items: zhAugSetDPrograms,
+        })),
       ],
     },
     map: {
@@ -73,6 +255,7 @@ export const messages = {
       detailCloseAria: '關閉作品詳情',
       detailPrevAria: '上一張',
       detailNextAria: '下一張',
+      detailArtistsAria: '藝術家',
       detailOpenHint: '開啟作品詳情',
       /**
        * 每張卡片：image 跑馬燈縮圖；gallery 詳情輪播。
@@ -136,25 +319,22 @@ export const messages = {
     },
     /** 右側社群直欄（連結請依實際官方帳號修改） */
     social: {
-      railAria: '社群媒體與聯絡',
-      followLabel: '聯絡我們',
+      railAria: '社群媒體',
       facebook: 'Facebook',
       instagram: 'Instagram',
       youtube: 'YouTube',
-      email: '電子郵件',
       backToTop: '回到頂部',
       urls: {
-        facebook: 'https://www.facebook.com/creativeexpotw',
-        instagram: 'https://www.instagram.com/creativeexpotw/',
-        youtube: 'https://www.youtube.com/@creativeexpotw',
-        email: 'mailto:info@clab.org.tw',
+        facebook: 'https://www.facebook.com/CLAB.FUTUREVISIONLAB/',
+        instagram: 'https://www.instagram.com/clab.futurevisionlab/',
+        youtube: 'https://www.youtube.com/playlist?list=PLXJ_MjvcL-q5V-vae8rmre2Rz4ZTjB6gF',
       },
     },
     langSwitch: '語言',
   },
   en: {
     siteName: '2026 Creative Expo Taiwan',
-    siteTagline: 'Taiwan Creative Expo',
+    siteTagline: 'CREATIVE EXPO TAIWAN 2026',
     nav: {
       admission: 'Visitor Info',
       about: 'About',
@@ -167,6 +347,13 @@ export const messages = {
       title: 'Creative Expo Taiwan',
       subtitle: 'Art Festival',
       cta: 'View schedule',
+      card: {
+        ariaLabel: 'Event information',
+        zhLine: '空總臺灣當代文化實驗場 - 古蹟大樓',
+        enLine1: 'Taiwan Contemporary Culture Lab -',
+        enLine2: 'Building',
+        date: '08.01 [Sat] — 8.31 [Mon]',
+      },
     },
     admission: {
       title: 'Visitor information',
@@ -190,10 +377,10 @@ export const messages = {
     about: {
       title: 'About us',
       body: `Urban Spectrum is shaped by local curators and collaborating artists across immersive environments, sound, and new media—inviting audiences to read the city through body and senses.\n\nWe believe art strengthens communities and dialogue, and builds shared memories beyond conventional venues. This year takes “spectrum” as a metaphor, translating overlooked everyday signals—sound, scent, texture, and temperature—into tangible artistic language.`,
-      officialAboutUrl: 'https://creativexpo.tw/en/about',
+      officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
       moreLabel: 'Learn more',
       officialAboutAria:
-        'Open Taiwan Creative Expo official About page (new tab)',
+        'Open FUTURE VISION LAB 2026 official website (new tab)',
     },
     aboutGlow: {
       ariaLabel:
@@ -202,11 +389,45 @@ export const messages = {
     schedule: {
       title: 'Schedule',
       note: '＊Programmes are subject to on-site announcements',
+      emptyDay: 'No programmes on this day',
+      weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      eventDates: [
+        '2026-08-01',
+        '2026-08-02',
+        '2026-08-07',
+        '2026-08-08',
+        '2026-08-09',
+        '2026-08-14',
+        '2026-08-15',
+        '2026-08-16',
+        '2026-08-21',
+        '2026-08-22',
+        '2026-08-23',
+        '2026-08-28',
+        '2026-08-29',
+        '2026-08-30',
+      ],
       slots: [
-        { day: 'Thu 15 May', time: '11:00–20:00', name: 'Opening / Curator tour 14:00' },
-        { day: 'Fri 16 May', time: '11:00–20:00', name: 'nArtist talk: city & senses 16:30' },
-        { day: 'Sat 17 May', time: '10:00–21:00', name: 'Evening programme / Sound performance 19:30' },
-        { day: 'Sun 18 May', time: '10:00–18:00', name: 'Family workshops 11:00, 15:00' },
+        ...AUG_SHARED_DATES.map((date) => ({
+          date,
+          name: 'Program 1',
+          items: enAugSharedPrograms,
+        })),
+        ...AUG_SET_B_DATES.map((date) => ({
+          date,
+          name: 'Program 2',
+          items: enAugSetBPrograms,
+        })),
+        ...AUG_SET_C_DATES.map((date) => ({
+          date,
+          name: 'Program 3',
+          items: enAugSetCPrograms,
+        })),
+        ...AUG_SET_D_DATES.map((date) => ({
+          date,
+          name: 'Program 4',
+          items: enAugSetDPrograms,
+        })),
       ],
     },
     map: {
@@ -223,6 +444,7 @@ export const messages = {
       detailCloseAria: 'Close artwork details',
       detailPrevAria: 'Previous image',
       detailNextAria: 'Next image',
+      detailArtistsAria: 'Artists',
       detailOpenHint: 'Open artwork details',
       cards: [
         {
@@ -282,18 +504,15 @@ export const messages = {
       copy: '© 2026 C-LAB Future Vision Lab. All Rights Reserved.',
     },
     social: {
-      railAria: 'Social media and contact',
-      followLabel: 'Contact Us',
+      railAria: 'Social media',
       facebook: 'Facebook',
       instagram: 'Instagram',
       youtube: 'YouTube',
-      email: 'Email',
       backToTop: 'Back to top',
       urls: {
-        facebook: 'https://www.facebook.com/creativeexpotw',
-        instagram: 'https://www.instagram.com/creativeexpotw/',
-        youtube: 'https://www.youtube.com/@creativeexpotw',
-        email: 'mailto:info@clab.org.tw',
+        facebook: 'https://www.facebook.com/CLAB.FUTUREVISIONLAB/',
+        instagram: 'https://www.instagram.com/clab.futurevisionlab/',
+        youtube: 'https://www.youtube.com/playlist?list=PLXJ_MjvcL-q5V-vae8rmre2Rz4ZTjB6gF',
       },
     },
     langSwitch: 'Language',

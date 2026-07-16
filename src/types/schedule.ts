@@ -11,10 +11,12 @@ export type ScheduleSlot = {
   /** 放映時段（選填） */
   time?: string
   name: string
+  /** 展開群組後顯示於頂部的單元簡介 */
+  groupIntro?: string
   creator?: string
   duration?: string
   region?: string
-  /** 點開後才顯示的子節目（如「節目一」） */
+  /** 點開後才顯示的子節目（如「單元一」） */
   items?: readonly ScheduleProgram[]
 }
 

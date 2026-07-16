@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
+  artistBioCacheKey,
+  fetchArtistBio,
   fetchProjectWorks,
   getWorksApiConfig,
   mapUnzipWorkToCard,
@@ -541,16 +543,18 @@ const txt = computed(() => messages[lang.value])
 const apiWorks = ref<UnzipWork[] | null>(null)
 
 const worksCards = computed((): readonly WorkCard[] => {
-  if (apiWorks.value?.length) {
+  if (apiWorks.value) {
     return apiWorks.value.map((work) => mapUnzipWorkToCard(work, lang.value))
   }
   return txt.value.works.cards
 })
 
 function workCardMarqueeText(card: { body: string }): string {
-  const first = card.body.split(/\n\n+/)[0]?.trim() ?? card.body.trim()
-  if (first.length <= 160) return first
-  return `${first.slice(0, 157)}…`
+  const firstBlock = card.body.split(/\n\n+/)[0]?.trim() ?? card.body.trim()
+  const text = firstBlock.replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  if (text.length <= 160) return text
+  return `${text.slice(0, 157)}…`
 }
 
 async function loadWorksFromApi() {
@@ -559,11 +563,9 @@ async function loadWorksFromApi() {
 
   try {
     const items = await fetchProjectWorks(url, key)
-    if (items.length > 0) {
-      apiWorks.value = items
-      await nextTick()
-      measureWorksMarqueeSegment()
-    }
+    apiWorks.value = items
+    await nextTick()
+    measureWorksMarqueeSegment()
   } catch (error) {
     if (import.meta.env.DEV) console.error('[works] API fetch failed', error)
   }
@@ -584,6 +586,10 @@ const worksPointerDownCardIndex = ref<number | null>(null)
 
 const worksDetailIndex = ref<number | null>(null)
 const worksDetailSlideIx = ref(0)
+const worksDetailPageIx = ref(0)
+const worksDetailArtistBioMap = ref<Record<string, string>>({})
+const worksDetailArtistBiosLoading = ref(false)
+let worksDetailArtistBioAbort: AbortController | null = null
 
 const worksDetailCard = computed(() => {
   const ix = worksDetailIndex.value
@@ -598,9 +604,27 @@ const worksDetailGalleryUrls = computed(() => {
 })
 
 const worksDetailArtists = computed(() => {
-  const c = worksDetailCard.value as { artists?: readonly { name: string; photoUrl: string }[] } | null
+  const c = worksDetailCard.value
   return c?.artists ?? []
 })
+
+const worksDetailHasArtistPage = computed(() => worksDetailArtists.value.length > 0)
+
+const worksDetailArtistHeading = computed(() => {
+  const names = worksDetailArtists.value.map((a) => a.name).filter(Boolean)
+  if (names.length === 0) return txt.value.works.detailArtistsAria
+  return names.join(lang.value === 'zh' ? '、' : ', ')
+})
+
+function worksDetailArtistBioKey(artist: { id: number; authorType: string }) {
+  return artistBioCacheKey(artist as { id: number; authorType: 'collective' | 'contributor' })
+}
+
+function worksDetailArtistBioParagraphs(artist: { id: number; authorType: string }) {
+  const bio = worksDetailArtistBioMap.value[worksDetailArtistBioKey(artist)]?.trim()
+  if (!bio) return [] as string[]
+  return splitProseParagraphs(bio)
+}
 
 const worksDetailSlideCount = computed(() => {
   const n = worksDetailGalleryUrls.value.length
@@ -647,6 +671,10 @@ const worksDetailBodyParagraphs = computed(() => {
 function openWorksDetail(index: number) {
   worksDetailIndex.value = index
   worksDetailSlideIx.value = 0
+  worksDetailPageIx.value = 0
+  worksDetailArtistBioMap.value = {}
+  worksDetailArtistBiosLoading.value = false
+  abortWorksDetailArtistBioFetch()
   nextTick(() => document.getElementById('works-detail-title')?.focus())
 }
 
@@ -659,20 +687,46 @@ function normalizeWorkTitle(value: string) {
 }
 
 const openableWorkTitles = computed(() => {
-  const titles: string[] = []
-  for (const card of worksCards.value) {
-    if (card.title?.trim()) titles.push(card.title.trim())
-    if (card.subtitle?.trim()) titles.push(card.subtitle.trim())
+  const titles = new Set<string>()
+
+  if (apiWorks.value?.length) {
+    for (const work of apiWorks.value) {
+      for (const candidate of [work.title_zh_tw, work.title]) {
+        const text = candidate?.trim()
+        if (text) titles.add(text)
+      }
+    }
   }
-  return titles
+
+  for (const card of worksCards.value) {
+    if (card.title?.trim()) titles.add(card.title.trim())
+    if (card.subtitle?.trim()) titles.add(card.subtitle.trim())
+  }
+
+  return [...titles]
 })
+
+function workTitleCandidates(card: WorkCard, work?: UnzipWork | null): string[] {
+  const titles = new Set<string>()
+  if (work) {
+    for (const candidate of [work.title_zh_tw, work.title]) {
+      const text = candidate?.trim()
+      if (text) titles.add(text)
+    }
+  }
+  for (const candidate of [card.title, card.subtitle]) {
+    const text = candidate?.trim()
+    if (text) titles.add(text)
+  }
+  return [...titles]
+}
 
 function findWorkCardIndexByProgramName(name: string): number {
   const needle = normalizeWorkTitle(name)
   if (!needle) return -1
-  return worksCards.value.findIndex((card) => {
-    const candidates = [card.title, card.subtitle].filter((t): t is string => !!t?.trim())
-    return candidates.some((title) => {
+  return worksCards.value.findIndex((card, index) => {
+    const work = apiWorks.value?.[index] ?? null
+    return workTitleCandidates(card, work).some((title) => {
       const hay = normalizeWorkTitle(title)
       return hay === needle || hay.includes(needle) || needle.includes(hay)
     })
@@ -687,6 +741,85 @@ function openWorksDetailByProgram(program: { name: string }) {
 
 function closeWorksDetail() {
   worksDetailIndex.value = null
+  worksDetailPageIx.value = 0
+  abortWorksDetailArtistBioFetch()
+}
+
+function abortWorksDetailArtistBioFetch() {
+  worksDetailArtistBioAbort?.abort()
+  worksDetailArtistBioAbort = null
+}
+
+async function loadWorksDetailArtistBios() {
+  const artists = worksDetailArtists.value
+  if (!artists.length) return
+
+  const pending = artists.filter((artist) => {
+    const key = worksDetailArtistBioKey(artist)
+    return worksDetailArtistBioMap.value[key] == null
+  })
+  if (!pending.length) return
+
+  abortWorksDetailArtistBioFetch()
+  const controller = new AbortController()
+  worksDetailArtistBioAbort = controller
+  worksDetailArtistBiosLoading.value = true
+
+  const { key: apiKey } = getWorksApiConfig()
+  if (!apiKey.trim()) {
+    worksDetailArtistBiosLoading.value = false
+    worksDetailArtistBioAbort = null
+    return
+  }
+
+  try {
+    const entries = await Promise.all(
+      pending.map(async (artist) => {
+        const cacheKey = worksDetailArtistBioKey(artist)
+        try {
+          const bio = await fetchArtistBio(artist, lang.value, apiKey, controller.signal)
+          return [cacheKey, bio] as const
+        } catch (err) {
+          if (controller.signal.aborted) return null
+          console.warn('[CET] artist bio fetch failed', artist.name, err)
+          return [cacheKey, ''] as const
+        }
+      }),
+    )
+
+    if (controller.signal.aborted) return
+
+    const next = { ...worksDetailArtistBioMap.value }
+    for (const entry of entries) {
+      if (!entry) continue
+      next[entry[0]] = entry[1]
+    }
+    worksDetailArtistBioMap.value = next
+  } finally {
+    if (worksDetailArtistBioAbort === controller) {
+      worksDetailArtistBiosLoading.value = false
+      worksDetailArtistBioAbort = null
+    }
+  }
+}
+
+function worksDetailSetPage(index: number) {
+  if (!worksDetailHasArtistPage.value) {
+    worksDetailPageIx.value = 0
+    return
+  }
+  const next = Math.max(0, Math.min(1, index))
+  worksDetailPageIx.value = next
+  if (next === 1) {
+    stopWorksDetailAutoplay()
+    void loadWorksDetailArtistBios()
+  } else {
+    restartWorksDetailAutoplay()
+  }
+}
+
+function worksDetailStepPage(delta: number) {
+  worksDetailSetPage(worksDetailPageIx.value + delta)
 }
 
 function worksDetailAdvanceSlide(delta: number) {
@@ -736,12 +869,19 @@ watch(worksDetailIndex, (ix) => {
   if (ix != null) {
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onWorksDetailKeydown)
-    startWorksDetailAutoplay()
+    if (worksDetailPageIx.value === 0) startWorksDetailAutoplay()
   } else {
     document.body.style.overflow = ''
     window.removeEventListener('keydown', onWorksDetailKeydown)
     stopWorksDetailAutoplay()
+    abortWorksDetailArtistBioFetch()
   }
+})
+
+watch(worksDetailPageIx, (pageIx) => {
+  if (worksDetailIndex.value == null) return
+  if (pageIx === 0) restartWorksDetailAutoplay()
+  else stopWorksDetailAutoplay()
 })
 
 watch(worksDetailGalleryUrls, (urls) => {
@@ -756,6 +896,19 @@ function onWorksDetailKeydown(e: KeyboardEvent) {
     closeWorksDetail()
     return
   }
+  if (worksDetailHasArtistPage.value) {
+    if (e.key === 'ArrowLeft' && worksDetailPageIx.value === 1) {
+      e.preventDefault()
+      worksDetailStepPage(-1)
+      return
+    }
+    if (e.key === 'ArrowRight' && worksDetailPageIx.value === 0) {
+      e.preventDefault()
+      worksDetailStepPage(1)
+      return
+    }
+  }
+  if (worksDetailPageIx.value !== 0) return
   if (e.key === 'ArrowLeft') {
     e.preventDefault()
     worksDetailStepSlide(-1)
@@ -772,6 +925,7 @@ function onWorksDetailTouchStart(e: TouchEvent) {
 }
 
 function onWorksDetailTouchEnd(e: TouchEvent) {
+  if (worksDetailPageIx.value !== 0) return
   const x = e.changedTouches[0]?.clientX ?? worksDetailTouchStartX
   const dx = x - worksDetailTouchStartX
   if (Math.abs(dx) < 48) return
@@ -1234,14 +1388,6 @@ function scrollToPageTop() {
               alt="FUTURE VISION LAB @ SKYWARD 晴空季"
               decoding="async"
             />
-            <div class="hero_logo">
-              <img
-                class="hero_logo__img"
-                src="/logo.svg"
-                alt="FUTURE VISION LAB"
-                decoding="async"
-              />
-            </div>
           </div>
         </div>
         <div
@@ -1363,6 +1509,15 @@ function scrollToPageTop() {
             >
               {{ txt.about.moreLabel }}
             </a>
+            <div class="hero_logo">
+              <img
+                class="hero_logo__img"
+                src="/logo.svg"
+                alt="FUTURE VISION LAB"
+                decoding="async"
+              />
+            </div>
+          
           </div>
           <div class="prose about-block__prose">
             <p
@@ -1506,7 +1661,7 @@ function scrollToPageTop() {
               <div ref="worksSegmentRef" class="works-marquee__segment">
                 <article
                   v-for="(card, i) in worksCards"
-                  :key="`w-a-${i}`"
+                  :key="`w-a-${card.id ?? i}-${card.title}`"
                   class="work-card work-card--marquee"
                   role="button"
                   tabindex="0"
@@ -1538,7 +1693,7 @@ function scrollToPageTop() {
               <div class="works-marquee__segment" aria-hidden="true">
                 <article
                   v-for="(card, i) in worksCards"
-                  :key="`w-b-${i}`"
+                  :key="`w-b-${card.id ?? i}-${card.title}`"
                   class="work-card work-card--marquee"
                   tabindex="-1"
                   :data-work-card-index="i"
@@ -1683,10 +1838,44 @@ function scrollToPageTop() {
           class="works-detail"
           @click.stop
         >
-          <header class="works-detail__header">
-            <h2 id="works-detail-title" class="works-detail__heading" tabindex="-1">
-              {{ worksDetailCard.title }}
-            </h2>
+          <header
+            class="works-detail__header"
+            :class="{ 'works-detail__header--navigable': worksDetailHasArtistPage }"
+          >
+            <div class="works-detail__header-nav">
+              <button
+                v-if="worksDetailHasArtistPage"
+                type="button"
+                class="works-detail__page-arrow works-detail__page-arrow--prev"
+                :disabled="worksDetailPageIx === 0"
+                :aria-label="txt.works.detailPagePrevAria"
+                @click="worksDetailStepPage(-1)"
+              />
+              <div
+                class="works-detail__header-swipe"
+                :class="{ 'works-detail__header-swipe--artist': worksDetailPageIx === 1 }"
+              >
+                <div class="works-detail__header-track">
+                  <h2 id="works-detail-title" class="works-detail__heading" tabindex="-1">
+                    {{ worksDetailCard.title }}
+                  </h2>
+                  <h2
+                    class="works-detail__heading works-detail__heading--artist"
+                    :aria-hidden="worksDetailPageIx === 0 ? 'true' : undefined"
+                  >
+                    {{ worksDetailArtistHeading }}
+                  </h2>
+                </div>
+              </div>
+              <button
+                v-if="worksDetailHasArtistPage"
+                type="button"
+                class="works-detail__page-arrow works-detail__page-arrow--next"
+                :disabled="worksDetailPageIx === 1"
+                :aria-label="txt.works.detailPageNextAria"
+                @click="worksDetailStepPage(1)"
+              />
+            </div>
             <button
               type="button"
               class="works-detail__close"
@@ -1697,6 +1886,14 @@ function scrollToPageTop() {
             </button>
           </header>
           <div class="works-detail__divider" aria-hidden="true" />
+          <div
+            class="works-detail__pages"
+            :class="{
+              'works-detail__pages--artist': worksDetailPageIx === 1,
+              'works-detail__pages--single': !worksDetailHasArtistPage,
+            }"
+          >
+            <div class="works-detail__page works-detail__page--work">
           <div class="works-detail__main">
             <div
               class="works-detail__media"
@@ -1754,40 +1951,8 @@ function scrollToPageTop() {
                 />
               </div>
               </div>
-              <div
-                v-if="worksDetailArtists.length"
-                class="works-detail__artists"
-                :aria-label="txt.works.detailArtistsAria"
-              >
-                <figure
-                  v-for="(artist, ai) in worksDetailArtists"
-                  :key="`artist-${ai}-${artist.name}`"
-                  class="works-detail__artist"
-                >
-                  <img
-                    :src="artist.photoUrl"
-                    :alt="artist.name"
-                    class="works-detail__artist-photo"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <figcaption class="works-detail__artist-name">{{ artist.name }}</figcaption>
-                </figure>
-              </div>
             </div>
             <div class="works-detail__prose">
-              <div v-if="worksDetailIntroParagraphs.length" class="works-detail__intro">
-                <p
-                  v-for="(para, pi) in worksDetailIntroParagraphs"
-                  :key="'wintro-' + pi"
-                  class="works-detail__intro-p"
-                >
-                  {{ para }}
-                </p>
-              </div>
-              <h3 v-if="worksDetailSubtitle" class="works-detail__subheading">
-                {{ worksDetailSubtitle }}
-              </h3>
               <div class="works-detail__body">
                 <p
                   v-for="(para, bi) in worksDetailBodyParagraphs"
@@ -1796,6 +1961,62 @@ function scrollToPageTop() {
                 >
                   {{ para }}
                 </p>
+              </div>
+            </div>
+          </div>
+            </div>
+            <div
+              v-if="worksDetailHasArtistPage"
+              class="works-detail__page works-detail__page--artist"
+            >
+              <div class="works-detail__artist-main">
+                <div class="works-detail__artist-media" :aria-label="txt.works.detailArtistsAria">
+                  <figure
+                    v-for="(artist, ai) in worksDetailArtists"
+                    :key="`artist-page-${ai}-${artist.id}`"
+                    class="works-detail__artist"
+                  >
+                    <img
+                      :src="artist.photoUrl"
+                      :alt="artist.name"
+                      class="works-detail__artist-photo"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <figcaption class="works-detail__artist-name">{{ artist.name }}</figcaption>
+                  </figure>
+                </div>
+                <div class="works-detail__artist-prose">
+                  <template v-for="(artist, ai) in worksDetailArtists" :key="`artist-bio-${ai}-${artist.id}`">
+                    <div
+                      v-if="worksDetailArtistBioParagraphs(artist).length"
+                      class="works-detail__artist-bio"
+                    >
+                      <h3 v-if="worksDetailArtists.length > 1" class="works-detail__artist-bio-name">
+                        {{ artist.name }}
+                      </h3>
+                      <p
+                        v-for="(para, pi) in worksDetailArtistBioParagraphs(artist)"
+                        :key="`abio-${ai}-${pi}`"
+                        class="works-detail__para"
+                      >
+                        {{ para }}
+                      </p>
+                    </div>
+                  </template>
+                  <p
+                    v-if="worksDetailArtistBiosLoading"
+                    class="works-detail__artist-bio-empty"
+                  >
+                    {{ txt.works.detailArtistBioLoading }}
+                  </p>
+                  <p
+                    v-else-if="!worksDetailArtists.some((a) => worksDetailArtistBioParagraphs(a).length)"
+                    class="works-detail__artist-bio-empty"
+                  >
+                    {{ txt.works.detailArtistBioEmpty }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -2578,15 +2799,13 @@ a:hover {
   filter: brightness(0) invert(1) drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
 }
 
-/** 對齊 title.svg 右緣；隨 .hero_title 視差上移 */
+/** 關於我們右上角 logo（由 hero 移入） */
 .hero_logo {
   position: absolute;
   z-index: 1;
-  top: 41%;
+  top: 0;
   right: 0;
-  left: auto;
-  width: clamp(40px, 20vw, 80px);
-  transform: none;
+  width: clamp(24px, 14vw, 96px);
   pointer-events: none;
 }
 
@@ -2595,7 +2814,6 @@ a:hover {
   width: 100%;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
 }
 
 .hero_title-bottom {
@@ -3395,6 +3613,7 @@ a:hover {
 }
 
 .about-block__head {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: start;
@@ -3403,6 +3622,7 @@ a:hover {
   gap: 0.15rem 1.25rem;
   margin-bottom: 1.25rem;
   text-align: center;
+  padding-right: clamp(3.5rem, 16vw, 7rem);
 }
 
 .about_title {
@@ -3793,27 +4013,167 @@ a:hover {
 
 .works-detail__header {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  gap: 1rem;
+  gap: 0;
   padding: 1.1rem 1.25rem 0.95rem;
   flex-shrink: 0;
 }
 
+.works-detail__header--navigable {
+  padding-bottom: 0.95rem;
+}
+
+.works-detail__header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: 100%;
+  padding-right: 2.35rem;
+}
+
+.works-detail__header-swipe {
+  flex: 0 1 auto;
+  width: min(20rem, calc(100% - 5rem));
+  min-width: 0;
+  overflow: hidden;
+}
+
+.works-detail__header-track {
+  display: flex;
+  width: 200%;
+  transform: translateX(0);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.works-detail__header-swipe--artist .works-detail__header-track {
+  transform: translateX(-50%);
+}
+
+.works-detail__page-arrow {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgb(var(--blue-rgb) / 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-on-light);
+  cursor: pointer;
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgb(var(--blue-rgb) / 0.12);
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.works-detail__page-arrow:hover:not(:disabled) {
+  color: var(--palette-blue-dim);
+  background: var(--surface-light-hover);
+  border-color: rgb(var(--blue-rgb) / 0.28);
+  transform: scale(1.05);
+}
+
+.works-detail__page-arrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.works-detail__page-arrow:disabled {
+  opacity: 0.28;
+  cursor: default;
+  box-shadow: none;
+}
+
+.works-detail__page-arrow--prev::after {
+  content: '‹';
+  display: block;
+  transform: translateX(-1px);
+}
+
+.works-detail__page-arrow--next::after {
+  content: '›';
+  display: block;
+  transform: translateX(1px);
+}
+
+.works-detail__header:not(.works-detail__header--navigable) .works-detail__header-nav {
+  padding: 0 2.85rem;
+}
+
+.works-detail__header:not(.works-detail__header--navigable) .works-detail__heading {
+  padding: 0;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+}
+
 .works-detail__heading {
   margin: 0;
-  padding: 0 2.85rem;
+  padding: 0;
   font-family: var(--font-title);
   font-size: clamp(1.1rem, 2.8vw, 1.35rem);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--on-accent);
   line-height: 1.35;
-  flex: 0 1 auto;
-  max-width: 100%;
+  flex: 0 0 50%;
+  width: 50%;
+  max-width: 50%;
   text-align: center;
+}
+
+.works-detail__heading--artist {
+  font-size: clamp(1rem, 2.5vw, 1.2rem);
+}
+
+.works-detail__pages {
+  display: flex;
+  width: 200%;
+  flex: 1 1 auto;
+  min-height: 0;
+  transform: translateX(0);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: pan-y;
+}
+
+.works-detail__pages--artist {
+  transform: translateX(-50%);
+}
+
+.works-detail__pages--single {
+  width: 100%;
+}
+
+.works-detail__pages--single .works-detail__page {
+  flex: 0 0 100%;
+  width: 100%;
+}
+
+.works-detail__page {
+  flex: 0 0 50%;
+  width: 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.works-detail__page--work,
+.works-detail__page--artist {
+  overflow: hidden;
 }
 
 .works-detail__divider {
@@ -3943,8 +4303,8 @@ a:hover {
 .works-detail__close {
   position: absolute;
   right: 0.85rem;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 1.05rem;
+  transform: none;
   flex-shrink: 0;
   width: 2.5rem;
   height: 2.5rem;
@@ -4130,6 +4490,66 @@ a:hover {
   max-width: 100%;
 }
 
+.works-detail__artist-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.75rem 2rem;
+  align-items: stretch;
+  padding: 1.35rem 1.25rem 1.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.works-detail__artist-media {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-content: start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.works-detail__artist-media:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
+
+.works-detail__artist-prose {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--on-accent);
+}
+
+.works-detail__artist-bio + .works-detail__artist-bio {
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgb(var(--blue-rgb) / 0.12);
+}
+
+.works-detail__artist-bio-name {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--on-accent);
+}
+
+.works-detail__artist-bio-empty {
+  margin: 0;
+  color: rgb(var(--blue-rgb) / 0.55);
+  font-style: italic;
+}
+
 .works-detail__prose {
   min-width: 0;
   min-height: 0;
@@ -4200,8 +4620,23 @@ a:hover {
     padding: 0.95rem 1rem 0.85rem;
   }
 
+  .works-detail__header-nav {
+    padding-right: 2rem;
+    gap: 0.1rem;
+  }
+
+  .works-detail__header-swipe {
+    width: min(18rem, calc(100% - 4.5rem));
+  }
+
   .works-detail__heading {
-    padding: 0 2.5rem;
+    padding: 0;
+    font-size: 1.1rem;
+  }
+
+  .works-detail__page-arrow {
+    width: 1.85rem;
+    height: 1.85rem;
     font-size: 1.1rem;
   }
 
@@ -4212,6 +4647,27 @@ a:hover {
     gap: 1rem;
     padding: 0 1rem 1.15rem;
     overflow: hidden;
+  }
+
+  .works-detail__artist-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1rem 1.15rem;
+    overflow: hidden;
+  }
+
+  .works-detail__artist-media {
+    flex: 0 0 auto;
+    order: 1;
+    max-height: min(42vh, 18rem);
+  }
+
+  .works-detail__artist-prose {
+    flex: 1 1 auto;
+    order: 2;
+    min-height: 0;
+    padding-right: 0;
   }
 
   .works-detail__media {
@@ -4291,7 +4747,11 @@ a:hover {
 
   .works-detail__heading {
     font-size: 1.05rem;
-    padding: 0 2.35rem;
+    padding: 0;
+  }
+
+  .works-detail__header-nav {
+    padding-right: 1.85rem;
   }
 
   .works-detail__main {

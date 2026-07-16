@@ -355,6 +355,12 @@ watch([viewYear, viewMonth], () => {
               <span class="schedule-card__name">{{ row.name }}</span>
               <span class="schedule-card__chevron" aria-hidden="true" />
             </button>
+            <div
+              v-if="isExpanded(row, i) && row.groupIntro"
+              class="schedule-card__group-intro"
+            >
+              <p class="schedule-card__group-intro-text">{{ row.groupIntro }}</p>
+            </div>
             <ul
               v-if="isExpanded(row, i)"
               class="schedule-card__items"
@@ -689,14 +695,31 @@ watch([viewYear, viewMonth], () => {
   transform: rotate(225deg);
 }
 
+.schedule-card__group-intro {
+  margin: 0;
+  padding: 0.95rem 1.1rem 0.15rem;
+  border-top: 1px solid rgb(var(--blue-rgb) / 0.12);
+  background: linear-gradient(
+    180deg,
+    rgb(var(--blue-rgb) / 0.05) 0%,
+    transparent 100%
+  );
+}
+
+.schedule-card__group-intro-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: rgb(var(--blue-rgb) / 0.82);
+}
+
 .schedule-card__items {
   list-style: none;
   margin: 0;
-  padding: 0 1.1rem 1rem;
+  padding: 0.75rem 1.1rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  border-top: 1px solid rgb(var(--blue-rgb) / 0.12);
 }
 
 .schedule-card__item {

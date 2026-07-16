@@ -42,33 +42,66 @@ export type UnzipWork = {
 type UnzipWorksResponse = {
   success?: boolean
   data?: UnzipWork[]
+  meta?: {
+    total?: number
+    limit?: number
+    offset?: number
+    totalPages?: number
+  }
 }
 
-const DEFAULT_WORKS_URL = 'https://unzip.clab.org.tw/api/v1/projects/21/works'
+const DEFAULT_WORKS_URL = 'https://unzip.clab.org.tw/api/v1/projects/119/works'
+const WORKS_PAGE_SIZE = 100
+
+function buildPaginatedWorksUrl(apiUrl: string, offset: number, limit = WORKS_PAGE_SIZE): string {
+  const url = new URL(apiUrl)
+  url.searchParams.set('limit', String(limit))
+  url.searchParams.set('offset', String(offset))
+  return url.toString()
+}
 
 export async function fetchProjectWorks(
   apiUrl: string,
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<UnzipWork[]> {
-  const res = await fetch(apiUrl, {
-    signal,
-    headers: {
-      Authorization: `Api-Key ${apiKey}`,
-      Accept: 'application/json',
-    },
-  })
+  const allWorks: UnzipWork[] = []
+  let offset = 0
+  let total: number | null = null
 
-  if (!res.ok) {
-    throw new Error(`Works API failed: ${res.status} ${res.statusText}`)
+  while (true) {
+    const res = await fetch(buildPaginatedWorksUrl(apiUrl, offset), {
+      signal,
+      headers: {
+        Authorization: `Api-Key ${apiKey}`,
+        Accept: 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      throw new Error(`Works API failed: ${res.status} ${res.statusText}`)
+    }
+
+    const json = (await res.json()) as UnzipWorksResponse
+    if (!json.success || !Array.isArray(json.data)) {
+      throw new Error('Works API returned an unexpected payload')
+    }
+
+    const batch = json.data.filter((work) => work.state !== 'inactive')
+    allWorks.push(...batch)
+
+    if (typeof json.meta?.total === 'number') {
+      total = json.meta.total
+    }
+
+    if (batch.length === 0) break
+    if (total != null && allWorks.length >= total) break
+    if (batch.length < WORKS_PAGE_SIZE) break
+
+    offset += batch.length
   }
 
-  const json = (await res.json()) as UnzipWorksResponse
-  if (!json.success || !Array.isArray(json.data)) {
-    throw new Error('Works API returned an unexpected payload')
-  }
-
-  return json.data.filter((work) => work.state !== 'inactive')
+  return allWorks
 }
 
 function pickLocalizedText(lang: Lang, zh?: string | null, en?: string | null): string {
@@ -121,7 +154,8 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
   const collectives = work.collectives ?? []
   /** 有個別創作者照片時優先顯示個人，避免團體與個人重複 */
   const hasContributorPhotos = contributors.some((c) => !!c.image_1920_media?.url?.trim())
-  const authors: UnzipAuthor[] = hasContributorPhotos ? contributors : collectives
+  const authorType: WorkArtist['authorType'] = hasContributorPhotos ? 'contributor' : 'collective'
+  const authors = hasContributorPhotos ? contributors : collectives
   const seen = new Set<string>()
   const artists: WorkArtist[] = []
 
@@ -130,23 +164,106 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
     if (!photoUrl) continue
     const name = pickAuthorName(lang, author)
     if (!name) continue
-    const key = `${name}|${photoUrl}`
+    const id = author.id
+    if (id == null) continue
+    const key = `${authorType}-${id}`
     if (seen.has(key)) continue
     seen.add(key)
-    artists.push({ name, photoUrl })
+    artists.push({ id, authorType, name, photoUrl })
   }
 
   return artists
 }
 
+function stripHtmlText(html: string): string {
+  const trimmed = html.trim()
+  if (!trimmed) return ''
+  const withLineBreaks = trimmed
+    .replace(/<br\s*\/?>/gi, '\n')
+    /** 標題 </p> 後緊接正文時不要斷成新段落（如「莊禾</p>作品介紹…」） */
+    .replace(/<\/p>(?=\s*[^<\s])/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<p[^>]*>/gi, '')
+
+  if (typeof document !== 'undefined') {
+    const el = document.createElement('div')
+    el.innerHTML = withLineBreaks
+    const decoded = el.textContent ?? ''
+    return decoded.replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  return withLineBreaks
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+}
+
+type UnzipCollectiveDetail = {
+  description?: string | null
+  description_zh_tw?: string | null
+}
+
+type UnzipContributorDetail = {
+  introduction?: string | null
+  introduction_zh_tw?: string | null
+  biography?: string | null
+  biography_zh_tw?: string | null
+}
+
+export function artistBioCacheKey(artist: Pick<WorkArtist, 'id' | 'authorType'>): string {
+  return `${artist.authorType}-${artist.id}`
+}
+
+export async function fetchArtistBio(
+  artist: Pick<WorkArtist, 'id' | 'authorType'>,
+  lang: Lang,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const base = 'https://unzip.clab.org.tw/api/v1'
+  const path =
+    artist.authorType === 'collective'
+      ? `${base}/collectives/${artist.id}`
+      : `${base}/contributors/${artist.id}`
+
+  const res = await fetch(path, {
+    signal,
+    headers: {
+      Authorization: `Api-Key ${apiKey}`,
+      Accept: 'application/json',
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(`Artist API failed: ${res.status} ${res.statusText}`)
+  }
+
+  const json = (await res.json()) as { data?: UnzipCollectiveDetail & UnzipContributorDetail }
+  const data = json.data
+  if (!data) return ''
+
+  let raw = ''
+  if (artist.authorType === 'contributor') {
+    raw =
+      pickLocalizedText(lang, data.introduction_zh_tw, data.introduction) ||
+      pickLocalizedText(lang, data.biography_zh_tw, data.biography)
+  } else {
+    raw = pickLocalizedText(lang, data.description_zh_tw, data.description)
+  }
+
+  return stripHtmlText(raw)
+}
+
 export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
   const title = pickLocalizedText(lang, work.title_zh_tw, work.title)
-  const body = pickLocalizedText(lang, work.note_zh_tw, work.note)
+  const body = stripHtmlText(pickLocalizedText(lang, work.note_zh_tw, work.note))
   const gallery = buildGallery(work)
   const image = gallery[0] ?? ''
   const artists = buildArtists(lang, work)
 
   return {
+    id: work.id,
     title,
     image,
     gallery,

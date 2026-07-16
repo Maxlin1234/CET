@@ -3,6 +3,23 @@ export type Lang = 'zh' | 'en'
 /** 8/1、8/2、8/21、8/28 共用同一組節目 */
 const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-28'] as const
 
+const zhUnitOneIntro =
+  '聚焦生態與環境議題的沉浸式影像，從數位創世到海洋敘事，並精選 SAT Fest 國際作品。'
+const zhUnitTwoIntro =
+  '以光、意識與時間為軸線，呈現跨國實驗音像與感知介面的當代創作。'
+const zhUnitThreeIntro =
+  '匯集動畫、行為與複合媒材作品，探索自然、都市與身體的多重想像。'
+const zhUnitFourIntro = '現場即時影像與聲音的 A/V 演出，在穹頂空間中展開即興的視聽對話。'
+
+const enUnitOneIntro =
+  'Immersive works on ecology and the environment—from digital genesis to ocean narratives—alongside SAT Fest international highlights.'
+const enUnitTwoIntro =
+  'Experimental audiovisual works exploring light, consciousness, and time as frameworks for perception.'
+const enUnitThreeIntro =
+  'Animation, performance, and mixed-media works spanning nature, urban life, and embodied experience.'
+const enUnitFourIntro =
+  'A live A/V set unfolding in real time within the dome as image and sound respond to the moment.'
+
 const zhAugSharedPrograms = [
   { name: '萬象之初', creator: '浮點設計', duration: '3 mins', region: '臺灣' },
   { name: '角鯨之殤', creator: '張簡長倫', duration: '10 mins', region: '臺灣' },
@@ -221,22 +238,26 @@ export const messages = {
       slots: [
         ...AUG_SHARED_DATES.map((date) => ({
           date,
-          name: '節目一',
+          name: '單元一',
+          groupIntro: zhUnitOneIntro,
           items: zhAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
-          name: '節目二',
+          name: '單元二',
+          groupIntro: zhUnitTwoIntro,
           items: zhAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
-          name: '節目三',
+          name: '單元三',
+          groupIntro: zhUnitThreeIntro,
           items: zhAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({
           date,
-          name: '節目四',
+          name: '單元四',
+          groupIntro: zhUnitFourIntro,
           items: zhAugSetDPrograms,
         })),
       ],
@@ -256,6 +277,10 @@ export const messages = {
       detailPrevAria: '上一張',
       detailNextAria: '下一張',
       detailArtistsAria: '藝術家',
+      detailPagePrevAria: '上一頁：作品介紹',
+      detailPageNextAria: '下一頁：藝術家',
+      detailArtistBioLoading: '載入介紹中…',
+      detailArtistBioEmpty: '暫無藝術家介紹',
       detailOpenHint: '開啟作品詳情',
       /**
        * 每張卡片：image 跑馬燈縮圖；gallery 詳情輪播。
@@ -411,21 +436,25 @@ export const messages = {
         ...AUG_SHARED_DATES.map((date) => ({
           date,
           name: 'Program 1',
+          groupIntro: enUnitOneIntro,
           items: enAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
           name: 'Program 2',
+          groupIntro: enUnitTwoIntro,
           items: enAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
           name: 'Program 3',
+          groupIntro: enUnitThreeIntro,
           items: enAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({
           date,
           name: 'Program 4',
+          groupIntro: enUnitFourIntro,
           items: enAugSetDPrograms,
         })),
       ],
@@ -445,6 +474,10 @@ export const messages = {
       detailPrevAria: 'Previous image',
       detailNextAria: 'Next image',
       detailArtistsAria: 'Artists',
+      detailPagePrevAria: 'Previous: artwork',
+      detailPageNextAria: 'Next: artist',
+      detailArtistBioLoading: 'Loading bio…',
+      detailArtistBioEmpty: 'No artist bio available',
       detailOpenHint: 'Open artwork details',
       cards: [
         {

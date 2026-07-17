@@ -10,7 +10,7 @@ import {
 } from '@/api/unzipWorks'
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import ScheduleCalendar from '@/components/ScheduleCalendar.vue'
-import type { Lang } from './i18n'
+import type { AdmissionTicketItem, Lang } from './i18n'
 import { UNIT_ACCENT_PROGRAM_GROUPS, messages } from './i18n'
 import type { ScheduleAccent } from '@/types/schedule'
 import type { WorkArtistBioSource, WorkCard } from '@/types/workCard'
@@ -540,6 +540,37 @@ onUnmounted(() => {
 })
 
 const txt = computed(() => messages[lang.value])
+
+type AdmissionTicketRow =
+  | { kind: 'item'; text: string; url?: string; num: number }
+  | { kind: 'heading'; text: string }
+  | { kind: 'note'; text: string }
+  | { kind: 'lead'; text: string }
+
+function buildTicketDisplayRows(
+  items: readonly AdmissionTicketItem[],
+): AdmissionTicketRow[] {
+  const rows: AdmissionTicketRow[] = []
+  let num = 0
+  for (const item of items) {
+    if (item.kind === 'heading') {
+      num = 0
+      rows.push({ kind: 'heading', text: item.text })
+      continue
+    }
+    if (item.kind === 'note' || item.kind === 'lead') {
+      rows.push({ kind: item.kind, text: item.text })
+      continue
+    }
+    num += 1
+    rows.push({ kind: 'item', text: item.text, url: item.url, num })
+  }
+  return rows
+}
+
+const ticketDisplayRows = computed(() =>
+  buildTicketDisplayRows(txt.value.admission.ticketsItems),
+)
 
 const apiWorks = ref<UnzipWork[] | null>(null)
 
@@ -1596,7 +1627,17 @@ function scrollToPageTop() {
         <div class="section__inner section__inner--schedule">
           <div class="section__head">
             <h2 id="schedule-heading" class="section__title">{{ txt.schedule.title }}</h2>
-            <p class="section__note">{{ txt.schedule.note }}</p>
+            <div
+              v-if="txt.schedule.infoLines?.length"
+              class="section__note section__note--schedule-info"
+            >
+              <p
+                v-for="(line, i) in txt.schedule.infoLines"
+                :key="`sch-info-${i}`"
+              >
+                {{ line }}
+              </p>
+            </div>
           </div>
           <ScheduleCalendar
             :lang="lang"
@@ -1671,16 +1712,39 @@ function scrollToPageTop() {
               aria-labelledby="admission-tab-tickets"
             >
               <ul class="admission-panel__list">
-                <li
-                  v-for="(line, i) in txt.admission.ticketsItems"
+                <template
+                  v-for="(row, i) in ticketDisplayRows"
                   :key="`adm-t-${i}`"
-                  class="admission-panel__card"
                 >
-                  <span class="admission-panel__num" aria-hidden="true">{{
-                    String(i + 1).padStart(2, '0')
-                  }}</span>
-                  <p>{{ line }}</p>
-                </li>
+                  <li
+                    v-if="row.kind === 'heading'"
+                    class="admission-panel__section-heading"
+                  >
+                    {{ row.text }}
+                  </li>
+                  <li
+                    v-else-if="row.kind === 'lead' || row.kind === 'note'"
+                    class="admission-panel__aside"
+                  >
+                    <p>{{ row.text }}</p>
+                  </li>
+                  <li v-else class="admission-panel__card">
+                    <span class="admission-panel__num" aria-hidden="true">{{
+                      String(row.num).padStart(2, '0')
+                    }}</span>
+                    <p>
+                      {{ row.text
+                      }}<a
+                        v-if="row.url"
+                        :href="row.url"
+                        class="admission-panel__link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >{{ row.url }}</a
+                      >
+                    </p>
+                  </li>
+                </template>
               </ul>
             </div>
           </Transition>
@@ -3315,6 +3379,31 @@ a:hover {
   flex-shrink: 0;
 }
 
+.admission-panel__card--flow {
+  display: block;
+}
+
+.admission-panel__section-heading {
+  margin: 0.35rem 0 0;
+  padding: 0 0.15rem;
+  font-family: var(--font-title);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-on-surface);
+}
+
+.admission-panel__aside {
+  margin: 0;
+  padding: 0 0.15rem;
+}
+
+.admission-panel__aside p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgb(var(--blue-rgb) / 0.78);
+}
+
 .admission-panel__card p {
   margin: 0;
   font-family: var(--font-body);
@@ -3322,6 +3411,18 @@ a:hover {
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-on-surface);
+}
+
+.admission-panel__link {
+  color: rgb(var(--blue-rgb));
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.admission-panel__link:hover {
+  text-decoration-thickness: 2px;
 }
 
 @keyframes about-glow-cell-flow {
@@ -4979,6 +5080,18 @@ a:hover {
   color: var(--ink-soft);
   text-align: center;
   max-width: 62ch;
+}
+
+.section__note--schedule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.section__note--schedule-info p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-on-light);
 }
 .prose p {
   margin: 0 0 1.1em;

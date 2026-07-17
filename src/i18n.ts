@@ -1,24 +1,31 @@
 export type Lang = 'zh' | 'en'
 
+export type AdmissionTicketItem = {
+  kind: 'item' | 'heading' | 'note' | 'lead'
+  text: string
+  url?: string
+}
+
 /** 8/1、8/2、8/21、8/28 共用同一組節目 */
 const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-28'] as const
 
 const zhUnitOneIntro =
-  '聚焦生態與環境議題的沉浸式影像，從數位創世到海洋敘事，並精選 SAT Fest 國際作品。'
+  '凝視自然、生態與地景的變遷，從生命之初到萬物循環，在穹頂視野中展開一場跨越時間與環境的沉浸旅程。'
 const zhUnitTwoIntro =
-  '以光、意識與時間為軸線，呈現跨國實驗音像與感知介面的當代創作。'
+  '光影、演算法與意識彼此交織，打開觀看的多重維度，重新探索科技媒介如何形塑我們感知世界的方式。'
 const zhUnitThreeIntro =
-  '匯集動畫、行為與複合媒材作品，探索自然、都市與身體的多重想像。'
-const zhUnitFourIntro = '現場即時影像與聲音的 A/V 演出，在穹頂空間中展開即興的視聽對話。'
+  '在科技、文明與自然交會的世界裡，作品描繪未來的多重樣貌，邀請觀眾展開對未知世界的感知與想像。'
+const zhUnitFourIntro =
+  '即時生成的聲音與影像在穹頂空間交會，藝術家與觀眾共同參與一場持續生成的沉浸體驗，讓觀看成為彼此感知與回應的過程。'
 
 const enUnitOneIntro =
-  'Immersive works on ecology and the environment—from digital genesis to ocean narratives—alongside SAT Fest international highlights.'
+  'Contemplating the transformations of nature, ecology, and landscape—from the dawn of life to the cycle of all things—an immersive journey across time and environment unfolds within the panoramic dome.'
 const enUnitTwoIntro =
-  'Experimental audiovisual works exploring light, consciousness, and time as frameworks for perception.'
+  'Light, algorithms, and consciousness intertwine to open multiple dimensions of seeing, reexamining how technological media shape the way we perceive the world.'
 const enUnitThreeIntro =
-  'Animation, performance, and mixed-media works spanning nature, urban life, and embodied experience.'
+  'At the intersection of technology, civilization, and nature, these works portray multiple visions of the future, inviting audiences to sense and imagine unknown worlds.'
 const enUnitFourIntro =
-  'A live A/V set unfolding in real time within the dome as image and sound respond to the moment.'
+  'Sound and image generated in real time converge within the dome, as artists and audiences take part in an ever-evolving immersive experience where watching becomes a process of mutual sensing and response.'
 
 const zhAugSharedPrograms = [
   { name: '萬象之初', creator: '浮點設計', duration: '3 mins', region: '臺灣' },
@@ -208,27 +215,40 @@ export const messages = {
     admission: {
       title: '入場須知',
       tabNotes: '注意事項',
-      tabTickets: '索票／購票／入場方式',
+      tabTickets: '入場方式',
       notesItems: [
-        '演出含強烈閃光，請斟酌入場。',
-        '場地為鏡面地板，建議穿著長褲。',
-        '因空間有限，禁止野餐墊與座椅；若需協助請洽現場工作人員。',
-        '放映／展場內可拍照與直播，禁止閃光燈與腳架。',
-        '如遇天候或不可抗力，主辦單位保留調整活動／動線／場次之權利。',
+        '演出內容有部分包含強烈閃光，敬請斟酌入場。',
+        '因活動場地為鏡面地板，建議請穿著「褲裝」進場觀賞。',
+        '因場內空間有限，禁止鋪設野餐墊、椅子；若有其他需求，請洽詢現場工作人員協助。',
+        '播映過程可拍照、即時動態拍攝，但禁止使用閃光燈及腳架。',
+        '主辦單位保有調整與變更活動之權利。',
       ],
       ticketsItems: [
-        '請於主辦指定管道完成索票或購票，入場請出示電子票券、QR Code 或實體票並配合驗票。',
-        '各場名額有限，售完／額滿恕不另行開放或現場售票者依公告為準。',
-        '請依票面場次時間入場；遲到觀眾請依現場工作人員引導，可能無法保證原位或完整觀賞動線。',
-        '優惠票券請自備並出示符合規定之身分證明或文件以利查驗。',
-        '票券逾期未使用視同放棄，退票與異動請依售票平台規定辦理。',
-      ],
+        { kind: 'item', text: '節目索票資訊請鎖定「C-LAB 未來視覺實驗室」臉書 或 IG' },
+        {
+          kind: 'item',
+          text: '詳細節目資訊請至「FUTURE VISION LAB @ 晴空季」官網查詢：',
+          url: 'https://fvl.clab.org.tw/festival/2026',
+        },
+        { kind: 'item', text: '採現場排隊依序入場，場內人數額滿為止。' },
+        { kind: 'note', text: '＊註：8/23(日) 為現場表演，入場方式請見【售票節目】說明。' },
+        { kind: 'item', text: '場內人數上限為100人，若額滿請等候場內觀眾離場後，依現場人數管制進場。' },
+        { kind: 'item', text: '開放入場時若排隊人員不在現場即視同放棄，需重新排隊依序等候入場。' },
+        { kind: 'heading', text: '【索票節目】' },
+        { kind: 'lead', text: '索票節目共1檔：8/23(日) 16:00｜《音像表演》' },
+        { kind: 'item', text: '一人一票憑票入場。' },
+        { kind: 'item', text: '開演前10分鐘開放入場，並不開放遲到觀眾入場。' },
+      ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
       title: '關於我們',
-      body: `自2020年起，C-LAB 未來視覺實驗室持續推動實驗展演計畫「FUTURE VISION LAB」，並以數位實驗建築為起點，打造穹形場域（DOME），持續探索科技媒體的視覺極限，過去六年已進行超過兩百件作品展演。2023年，在文化部支持下完成軟硬體升級，打造直徑15公尺、全臺唯一的巨型移動式戶外沉浸體驗空間「C-LAB穹頂劇場」。沉浸影像投影系統總運算可達 8K × 8K 超高解析度，並克服球形曲面投影在校正、融接、對位、播放控制與影像前製等多重技術挑戰。場域採雙層結構設計，搭配客製透聲投影膜片與25.4聲道環繞聲場環境，打造高規格沉浸式體驗。未來視覺實驗室持續優化穹形場域之創作環境，並向國際標準接軌，展現臺灣在科技藝術領域的創作能量。
+      body: `FUTURE VISION LAB @ 晴空季
 
-「FUTURE VISION LAB 2026」將自 2026年4月18日至6月7日，連續8個週末登場，匯集來自臺灣、法國、西班牙、匈牙利、奧地利、韓國、日本、美國與加拿大等各地精彩作品，共呈現19件作品、16檔節目。透過展覽、播映與現場 Live 演出等多元形式，在跨國創作的交會之中，邀請觀眾走入C-LAB穹頂劇場，沉浸於多元文化交織的感官體驗。`,
+C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE VISION LAB」，以數位實驗建築為起點，建構直徑15公尺、全臺唯一的巨型移動式戶外沉浸空間「C-LAB穹頂劇場」(FVL DOME)，探索科技媒體的感知邊界，並展現臺灣科技藝術創作的跨域能量。
+
+為呼應晴空季策展概念，在曾經承載飛行的場域中，穹頂成為新的感知介面，帶領觀眾穿梭於現實與未來之間的觀看視角，重新思考人類與科技、生態、時間與空間之間的關係，呈現當代科技藝術對未來感知的多重實驗與想像。
+
+8月期間，將呈現歷年精彩穹頂影像作品，以及邀請加拿大 SAT 科技藝術中心「SAT Fest 2026」獲獎作品來臺進行首場國際展映；另規劃現場LIVE演出，開啟跨越感知維度的穹頂體驗。`,
       officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
       moreLabel: '瞭解更多',
       officialAboutAria:
@@ -241,7 +261,10 @@ export const messages = {
     },
     schedule: {
       title: '場次',
-      note: '* 實際節目以現場公告為準',
+      infoLines: [
+        '入場時間：每週五至日，12:00 – 19:00',
+        '入場方式：隨到隨進，控管場內人數，不需預先索票',
+      ],
       emptyDay: '本日無節目',
       weekdays: ['日', '一', '二', '三', '四', '五', '六'],
       eventDates: [
@@ -263,28 +286,28 @@ export const messages = {
       slots: [
         ...AUG_SHARED_DATES.map((date) => ({
           date,
-          name: '單元一',
+          name: '單元一｜凝望大地',
           groupIntro: zhUnitOneIntro,
           accent: 'orange' as const,
           items: zhAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
-          name: '單元二',
+          name: '單元二｜穿越感官',
           groupIntro: zhUnitTwoIntro,
           accent: 'blue' as const,
           items: zhAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
-          name: '單元三',
+          name: '單元三｜想像未來',
           groupIntro: zhUnitThreeIntro,
           accent: 'purple' as const,
           items: zhAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({
           date,
-          name: '單元四',
+          name: '單元四｜感知彼此',
           groupIntro: zhUnitFourIntro,
           items: zhAugSetDPrograms,
         })),
@@ -410,26 +433,52 @@ export const messages = {
     },
     admission: {
       title: 'Visitor information',
-      tabNotes: 'Notes',
-      tabTickets: 'Tickets & entry',
+      tabNotes: 'Notice',
+      tabTickets: 'Admission Information',
       notesItems: [
-        'Performances include intense flashing lights—please judge whether entry is suitable for you.',
-        'Mirrored flooring is used in parts of the venue; long trousers are recommended.',
-        'Picnic blankets and folding chairs are not allowed due to limited space; speak to venue staff if you need assistance.',
-        'Photography and live streaming may be permitted in designated areas—no flash or tripods unless announced otherwise.',
-        'The organiser reserves the right to adjust or change programmes, routes, or schedules due to weather or force majeure.',
+        'Some programs contain intense strobe lighting effects. Viewer discretion is advised.',
+        'Due to the mirror floor in the venue, wearing "pants" for your visit is recommended.',
+        'Due to limited space inside the venue, picnic mats and chairs are not allowed. If you have other needs, please contact the staff for assistance.',
+        'Photography and reels recording are allowed during the screening, but the use of flash and tripods is prohibited.',
+        'Programs may be subject to change.',
       ],
       ticketsItems: [
-        'Claim or purchase tickets via the designated channels shown by the organiser. Present your e‑ticket, QR code, or paper ticket for admission and cooperate with verification.',
-        'Capacity is limited; when sold out, no sales or walk‑ins beyond published rules.',
-        'Arrive according to your ticketed slot; late arrivals will be seated or guided according to onsite staff—in some cases seating or routing may change.',
-        'For concession tickets please bring qualifying ID / documents listed on the ticketing page.',
-        'Unused admission may be forfeited past the ticket time; refunds and changes follow each platform’s terms.',
-      ],
+        {
+          kind: 'item',
+          text: 'For detailed program registration information, please visit the "C-LAB Future Vision Lab" Facebook page or the event page of C-LAB on ACCUPASS.',
+        },
+        {
+          kind: 'item',
+          text: 'For detailed program information, please visit FUTURE VISION LAB 2026 official website: ',
+          url: 'https://fvl.clab.org.tw/festival/2026',
+        },
+        { kind: 'item', text: 'Entry will be granted in order of on-site queue until capacity is reached.' },
+        {
+          kind: 'note',
+          text: '＊Note: Sunday, August 23 features a live performance. Please see the Ticketed Events section for admission information.',
+        },
+        {
+          kind: 'item',
+          text: 'The maximum capacity is 100 people. If the venue is full, please wait for audiences exiting before entering according to the capacity control.',
+        },
+        {
+          kind: 'item',
+          text: 'If individuals in the queue are not present when entry opens, they will be considered to have forfeited their places and must rejoin the line in order to wait for entry.',
+        },
+        { kind: 'heading', text: '【Ticketed Event】' },
+        { kind: 'lead', text: 'Ticketed Event includes August 23 (Fri.) "D/VJ Live performance"' },
+        { kind: 'item', text: 'One person, one ticket admission.' },
+        {
+          kind: 'item',
+          text: 'Please arrive at least 10 minutes before the performance or screening. Latecomers will not be admitted.',
+        },
+      ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
       title: 'About us',
-      body: `Urban Spectrum is shaped by local curators and collaborating artists across immersive environments, sound, and new media—inviting audiences to read the city through body and senses.\n\nWe believe art strengthens communities and dialogue, and builds shared memories beyond conventional venues. This year takes “spectrum” as a metaphor, translating overlooked everyday signals—sound, scent, texture, and temperature—into tangible artistic language.`,
+      body: `Since 2020, the C-LAB Future Vision Lab has developed the “FUTURE VISION LAB” experiment program with Taiwan’s only mobile outdoor dome- “FVL DOME”. Originating from experimental digital architecture, this program explores the boundaries of perception shaped by technology and highlights the interdisciplinary creativity of Taiwan’s tech-art scene.
+
+Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new perceptual interface at the former aviation site, inviting audiences to rethink the relationships between humanity, technology, ecology, time, and space. In August, FVL will screen the selected fulldome films from previous editions, alongside the Taiwan premiere of award-winning pieces from “SAT Fest 2026” by the SAT – Society for Arts and Technology, as well as the live audiovisual performance.`,
       officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
       moreLabel: 'Learn more',
       officialAboutAria:
@@ -441,7 +490,10 @@ export const messages = {
     },
     schedule: {
       title: 'Schedule',
-      note: '＊Programmes are subject to on-site announcements',
+      infoLines: [
+        'Opening hours: Fri–Sun, 12:00 – 19:00',
+        'Admission: Walk-in with on-site capacity control; no reservation required',
+      ],
       emptyDay: 'No programmes on this day',
       weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       eventDates: [
@@ -463,28 +515,28 @@ export const messages = {
       slots: [
         ...AUG_SHARED_DATES.map((date) => ({
           date,
-          name: 'Program 1',
+          name: 'Program 1 | Gazing at the Earth',
           groupIntro: enUnitOneIntro,
           accent: 'orange' as const,
           items: enAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
-          name: 'Program 2',
+          name: 'Program 2 | Through the Senses',
           groupIntro: enUnitTwoIntro,
           accent: 'blue' as const,
           items: enAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
-          name: 'Program 3',
+          name: 'Program 3 | Imagining Futures',
           groupIntro: enUnitThreeIntro,
           accent: 'purple' as const,
           items: enAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({
           date,
-          name: 'Program 4',
+          name: 'Program 4 | Sensing Each Other',
           groupIntro: enUnitFourIntro,
           items: enAugSetDPrograms,
         })),

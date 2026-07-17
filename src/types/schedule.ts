@@ -27,7 +27,8 @@ export type ScheduleSlot = {
 
 export type ScheduleCopy = {
   title: string
-  note: string
+  /** 標題下方入場資訊（每行一句） */
+  infoLines?: readonly string[]
   emptyDay: string
   weekdays: readonly string[]
   /** 有節目的日期（YYYY-MM-DD），用於日曆標記 */

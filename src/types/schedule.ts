@@ -1,3 +1,6 @@
+/** 單元強調色：一橘、二藍、三紫 */
+export type ScheduleAccent = 'orange' | 'blue' | 'purple'
+
 export type ScheduleProgram = {
   name: string
   creator?: string
@@ -13,6 +16,8 @@ export type ScheduleSlot = {
   name: string
   /** 展開群組後顯示於頂部的單元簡介 */
   groupIntro?: string
+  /** 單元強調色（單元一橘／二藍／三紫） */
+  accent?: ScheduleAccent
   creator?: string
   duration?: string
   region?: string

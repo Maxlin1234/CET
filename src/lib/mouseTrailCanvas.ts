@@ -193,6 +193,55 @@ void main() {
     return false
   }
 
+  const TEXT_HOST_SELECTOR = [
+    'p',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'span',
+    'li',
+    'label',
+    'button',
+    'figcaption',
+    'td',
+    'th',
+    '.work-card__name',
+    '.work-card__text',
+    '.works-board__title',
+    '.section__title',
+    '.section__note',
+    '.map__hint',
+    '.nav__link',
+    '.schedule-card__name',
+    '.schedule-card__creator',
+    '.schedule-card__group-intro-text',
+    '.admission-panel__title',
+    '.footer__inner',
+  ].join(', ')
+
+  function isTrailCanvasHost(el: Element | null) {
+    return !!el?.closest(
+      '.mouse-trail-canvas, .mouse-trail-invert-canvas, .mouse-trail-text-canvas',
+    )
+  }
+
+  /** 跑馬燈複製段雖 aria-hidden，仍可視，需保留負片；其餘隱藏層略過 */
+  function isIgnoredAriaHiddenHost(el: Element | null) {
+    const hidden = el?.closest('[aria-hidden="true"]')
+    if (!hidden) return false
+    if (hidden.closest('.works-marquee')) return false
+    return true
+  }
+
+  function hasUsableText(value: Node | Element | null | undefined) {
+    const text = value?.textContent?.replace(/\s/g, '') ?? ''
+    return text.length > 0
+  }
+
   function isPointOverText(clientX: number, clientY: number) {
     const doc = document as Document & {
       caretRangeFromPoint?(x: number, y: number): Range | null
@@ -207,16 +256,33 @@ void main() {
       const pos = doc.caretPositionFromPoint(clientX, clientY)
       if (pos?.offsetNode?.nodeType === Node.TEXT_NODE) textNode = pos.offsetNode
     }
-    if (!textNode) return false
 
-    const parent = textNode.parentElement
-    if (!parent) return false
-    if (parent.closest('[aria-hidden="true"], .mouse-trail-canvas, .mouse-trail-invert-canvas, .mouse-trail-text-canvas')) {
+    if (textNode) {
+      const parent = textNode.parentElement
+      if (
+        parent &&
+        !isTrailCanvasHost(parent) &&
+        !isIgnoredAriaHiddenHost(parent) &&
+        hasUsableText(textNode)
+      ) {
+        return true
+      }
+    }
+
+    /**
+     * CSS transform（作品跑馬燈）常使 caretRangeFromPoint 失效；
+     * 改以 elementFromPoint 命中文字容器作為後備。
+     */
+    const hit = document.elementFromPoint(clientX, clientY)
+    if (!(hit instanceof Element) || isTrailCanvasHost(hit) || isIgnoredAriaHiddenHost(hit)) {
+      return false
+    }
+    if (hit.closest('img, video, canvas, svg, .work-card__media, .works-detail__viewport')) {
       return false
     }
 
-    const text = textNode.textContent?.replace(/\s/g, '')
-    return !!text && text.length > 0
+    const textHost = hit.closest(TEXT_HOST_SELECTOR)
+    return textHost instanceof Element && hasUsableText(textHost)
   }
 
   function isInShrinkZone(clientX: number, clientY: number) {

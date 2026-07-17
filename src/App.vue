@@ -11,8 +11,9 @@ import {
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import ScheduleCalendar from '@/components/ScheduleCalendar.vue'
 import type { Lang } from './i18n'
-import { messages } from './i18n'
-import type { WorkCard } from '@/types/workCard'
+import { UNIT_ACCENT_PROGRAM_GROUPS, messages } from './i18n'
+import type { ScheduleAccent } from '@/types/schedule'
+import type { WorkArtistBioSource, WorkCard } from '@/types/workCard'
 import { Gradient } from '@/Gradient.js'
 import { initGridRevealCanvas } from '@/lib/gridRevealCanvas'
 import { initMouseTrailCanvas } from '@/lib/mouseTrailCanvas'
@@ -608,6 +609,10 @@ const worksDetailArtists = computed(() => {
   return c?.artists ?? []
 })
 
+const worksDetailArtistBioFallback = computed(
+  (): WorkArtistBioSource | null => worksDetailCard.value?.artistBioFallback ?? null,
+)
+
 const worksDetailHasArtistPage = computed(() => worksDetailArtists.value.length > 0)
 
 const worksDetailArtistHeading = computed(() => {
@@ -625,6 +630,15 @@ function worksDetailArtistBioParagraphs(artist: { id: number; authorType: string
   if (!bio) return [] as string[]
   return splitProseParagraphs(bio)
 }
+
+const worksDetailHasIndividualArtistBio = computed(() =>
+  worksDetailArtists.value.some((artist) => worksDetailArtistBioParagraphs(artist).length > 0),
+)
+
+const worksDetailFallbackBioParagraphs = computed(() => {
+  const fallback = worksDetailArtistBioFallback.value
+  return fallback ? worksDetailArtistBioParagraphs(fallback) : []
+})
 
 const worksDetailSlideCount = computed(() => {
   const n = worksDetailGalleryUrls.value.length
@@ -684,6 +698,40 @@ function normalizeWorkTitle(value: string) {
     .replace(/[\s　]/g, '')
     .replace(/[：:－—–\-_/\\|《》〈〉「」『』【】\[\]()（）]/g, '')
     .toLowerCase()
+}
+
+const unitAccentTitleKeys = computed(() => {
+  return UNIT_ACCENT_PROGRAM_GROUPS.map((group) => {
+    const keys = new Set<string>()
+    for (const title of group.titles) {
+      const key = normalizeWorkTitle(title)
+      if (key) keys.add(key)
+    }
+    return { accent: group.accent, keys }
+  })
+})
+
+function getWorkCardAccent(card: WorkCard, index: number): ScheduleAccent | null {
+  const work = apiWorks.value?.[index] ?? null
+  const candidates = workTitleCandidates(card, work).map(normalizeWorkTitle).filter(Boolean)
+  if (!candidates.length) return null
+
+  for (const group of unitAccentTitleKeys.value) {
+    for (const needle of candidates) {
+      for (const key of group.keys) {
+        if (needle === key || needle.includes(key) || key.includes(needle)) {
+          return group.accent
+        }
+      }
+    }
+  }
+  return null
+}
+
+function workCardUnitClass(card: WorkCard, index: number): string | undefined {
+  const accent = getWorkCardAccent(card, index)
+  if (!accent) return undefined
+  return `work-card--accent-${accent}`
 }
 
 const openableWorkTitles = computed(() => {
@@ -754,7 +802,20 @@ async function loadWorksDetailArtistBios() {
   const artists = worksDetailArtists.value
   if (!artists.length) return
 
-  const pending = artists.filter((artist) => {
+  const sources: WorkArtistBioSource[] = artists.map(({ id, authorType, name }) => ({
+    id,
+    authorType,
+    name,
+  }))
+  if (worksDetailArtistBioFallback.value) {
+    sources.push(worksDetailArtistBioFallback.value)
+  }
+
+  const uniqueSources = [...new Map(
+    sources.map((source) => [worksDetailArtistBioKey(source), source]),
+  ).values()]
+
+  const pending = uniqueSources.filter((artist) => {
     const key = worksDetailArtistBioKey(artist)
     return worksDetailArtistBioMap.value[key] == null
   })
@@ -1663,6 +1724,7 @@ function scrollToPageTop() {
                   v-for="(card, i) in worksCards"
                   :key="`w-a-${card.id ?? i}-${card.title}`"
                   class="work-card work-card--marquee"
+                  :class="workCardUnitClass(card, i)"
                   role="button"
                   tabindex="0"
                   :data-work-card-index="i"
@@ -1695,6 +1757,7 @@ function scrollToPageTop() {
                   v-for="(card, i) in worksCards"
                   :key="`w-b-${card.id ?? i}-${card.title}`"
                   class="work-card work-card--marquee"
+                  :class="workCardUnitClass(card, i)"
                   tabindex="-1"
                   :data-work-card-index="i"
                 >
@@ -1729,14 +1792,7 @@ function scrollToPageTop() {
           <h2 class="section__title">{{ txt.map.title }}</h2>
           <p class="map__hint">{{ txt.map.hint }}</p>
           <div class="map-area" role="region" :aria-label="txt.map.title">
-            <MapZoneAGoogle
-              :legend-text="txt.map.legendA"
-              :api-key="googleMapsApiKey"
-              :lat="mapZoneALat"
-              :lng="mapZoneALng"
-              :zoom="mapZoneAZoom"
-              :maps-language="lang === 'zh' ? 'zh-TW' : 'en'"
-            />
+            <img src="/map.jpeg" alt="map" class="map_img" />
           </div>
         </div>
       </section>
@@ -1745,8 +1801,8 @@ function scrollToPageTop() {
     <footer class="footer">
       <div class="footer__inner">
         <p>{{ txt.footer.organizer }}</p>
-        <p><a href="mailto:info@urban-spectrum.art">{{ txt.footer.contact }}</a></p>
-        <p class="copyfooter__">{{ txt.footer.copy }}</p>
+        <p class="copyfooter__">
+          © 2026 財團法人臺灣生活美學基金會. All Rights Reserved.</p>
       </div>
     </footer>
 
@@ -2004,6 +2060,24 @@ function scrollToPageTop() {
                       </p>
                     </div>
                   </template>
+                  <div
+                    v-if="
+                      !worksDetailHasIndividualArtistBio &&
+                      worksDetailFallbackBioParagraphs.length
+                    "
+                    class="works-detail__artist-bio"
+                  >
+                    <h3 class="works-detail__artist-bio-name">
+                      {{ worksDetailArtistBioFallback?.name }}
+                    </h3>
+                    <p
+                      v-for="(para, pi) in worksDetailFallbackBioParagraphs"
+                      :key="`fallback-bio-${pi}`"
+                      class="works-detail__para"
+                    >
+                      {{ para }}
+                    </p>
+                  </div>
                   <p
                     v-if="worksDetailArtistBiosLoading"
                     class="works-detail__artist-bio-empty"
@@ -2011,7 +2085,10 @@ function scrollToPageTop() {
                     {{ txt.works.detailArtistBioLoading }}
                   </p>
                   <p
-                    v-else-if="!worksDetailArtists.some((a) => worksDetailArtistBioParagraphs(a).length)"
+                    v-else-if="
+                      !worksDetailHasIndividualArtistBio &&
+                      !worksDetailFallbackBioParagraphs.length
+                    "
                     class="works-detail__artist-bio-empty"
                   >
                     {{ txt.works.detailArtistBioEmpty }}
@@ -2058,8 +2135,17 @@ function scrollToPageTop() {
   --palette-blue-dim: #0e1a5c;
   --palette-orange: #d97b4a;
   --palette-yellow: #e8b84a;
+  --palette-purple: #8b6fd4;
+  /** 單元標示色：比主色更亮、更醒目 */
+  --unit-orange: #ff8f3d;
+  --unit-blue: #3d6dff;
+  --unit-purple: #b48cff;
+  --unit-orange-rgb: 255 143 61;
+  --unit-blue-rgb: 61 109 255;
+  --unit-purple-rgb: 180 140 255;
   --blue-rgb: 27 47 158;
   --orange-rgb: 217 123 74;
+  --purple-rgb: 139 111 212;
   --yellow-rgb: 232 184 74;
   /** 場次區由上往下漸層：靛藍 → 天青 → 暖金 */
   --schedule-grad-from: #162d7a;
@@ -3877,7 +3963,6 @@ a:hover {
 
 .work-card {
   position: relative;
-  isolation: isolate;
   background: var(--surface-light);
   border-radius: 12px;
   border: 1px solid rgb(var(--blue-rgb) / 0.22);
@@ -3891,7 +3976,8 @@ a:hover {
   transition:
     box-shadow 0.26s ease,
     transform 0.26s ease,
-    border-color 0.26s ease;
+    border-color 0.26s ease,
+    border-width 0.26s ease;
 }
 
 .work-card:hover {
@@ -3901,6 +3987,84 @@ a:hover {
     0 14px 36px rgb(var(--blue-rgb) / 0.22),
     0 22px 56px rgb(var(--orange-rgb) / 0.14);
   border-color: rgb(var(--orange-rgb) / 0.45);
+}
+
+.work-card--accent-orange {
+  border: 2.5px solid var(--unit-orange);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 26px rgb(var(--unit-orange-rgb) / 0.3);
+}
+
+.work-card--accent-orange:hover {
+  border-width: 4px;
+  border-color: var(--unit-orange);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 16px 40px rgb(var(--unit-orange-rgb) / 0.38),
+    0 24px 60px rgb(var(--unit-orange-rgb) / 0.22);
+}
+
+.work-card--accent-orange:hover .work-card__name,
+.work-card--accent-orange:hover .work-card__accent {
+  color: var(--unit-orange);
+}
+
+.work-card--accent-orange:hover .work-card__name,
+.work-card--accent-orange:hover .work-card__accent {
+  color: var(--unit-orange);
+}
+
+.work-card--accent-blue {
+  border: 2.5px solid var(--unit-blue);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 26px rgb(var(--unit-blue-rgb) / 0.26);
+}
+
+.work-card--accent-blue:hover {
+  border-width: 4px;
+  border-color: var(--unit-blue);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 16px 40px rgb(var(--unit-blue-rgb) / 0.34),
+    0 24px 60px rgb(var(--unit-blue-rgb) / 0.18);
+}
+
+.work-card--accent-blue:hover .work-card__name,
+.work-card--accent-blue:hover .work-card__accent {
+  color: var(--unit-blue);
+}
+
+.work-card--accent-blue:hover .work-card__name,
+.work-card--accent-blue:hover .work-card__accent {
+  color: var(--unit-blue);
+}
+
+.work-card--accent-purple {
+  border: 2.5px solid var(--unit-purple);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 26px rgb(var(--unit-purple-rgb) / 0.28);
+}
+
+.work-card--accent-purple:hover {
+  border-width: 4px;
+  border-color: var(--unit-purple);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 16px 40px rgb(var(--unit-purple-rgb) / 0.36),
+    0 24px 60px rgb(var(--unit-purple-rgb) / 0.2);
+}
+
+.work-card--accent-purple:hover .work-card__name,
+.work-card--accent-purple:hover .work-card__accent {
+  color: var(--unit-purple);
+}
+
+.work-card--accent-purple:hover .work-card__name,
+.work-card--accent-purple:hover .work-card__accent {
+  color: var(--unit-purple);
 }
 
 .work-card__media {
@@ -3956,6 +4120,7 @@ a:hover {
   letter-spacing: 0.06em;
   color: var(--on-accent);
   text-align: center;
+  transition: color 0.2s ease;
 }
 
 .work-card__accent {
@@ -3965,6 +4130,7 @@ a:hover {
   line-height: 1;
   color: var(--text-on-light);
   transform: translateY(-1px);
+  transition: color 0.2s ease;
 }
 
 .work-card__text {
@@ -4814,7 +4980,6 @@ a:hover {
   text-align: center;
   max-width: 62ch;
 }
-
 .prose p {
   margin: 0 0 1.1em;
 }
@@ -4840,10 +5005,20 @@ a:hover {
 }
 
 .map-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 0;
   border-radius: 12px;
   overflow: hidden;
   min-height: 260px;
+}
+
+.map_img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
 }
 
 .footer {

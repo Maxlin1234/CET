@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Lang } from '@/i18n'
-import type { ScheduleCopy, ScheduleProgram } from '@/types/schedule'
+import type { ScheduleAccent, ScheduleCopy, ScheduleProgram } from '@/types/schedule'
 
 const props = defineProps<{
   lang: Lang
@@ -37,6 +37,14 @@ const eventDates = computed(() => {
   return set
 })
 
+const accentByDate = computed(() => {
+  const map = new Map<string, ScheduleAccent>()
+  for (const slot of props.schedule.slots) {
+    if (slot.accent) map.set(slot.date, slot.accent)
+  }
+  return map
+})
+
 function isoDate(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -64,6 +72,7 @@ type CalendarCell = {
   date: string
   inMonth: boolean
   hasEvents: boolean
+  accent: ScheduleAccent | null
   isSelected: boolean
   isToday: boolean
 }
@@ -95,6 +104,7 @@ const calendarCells = computed((): CalendarCell[] => {
       date,
       inMonth: false,
       hasEvents: eventDates.value.has(date),
+      accent: accentByDate.value.get(date) ?? null,
       isSelected: date === selectedDate.value,
       isToday: date === todayIso,
     })
@@ -108,6 +118,7 @@ const calendarCells = computed((): CalendarCell[] => {
       date,
       inMonth: true,
       hasEvents: eventDates.value.has(date),
+      accent: accentByDate.value.get(date) ?? null,
       isSelected: date === selectedDate.value,
       isToday: date === todayIso,
     })
@@ -125,6 +136,7 @@ const calendarCells = computed((): CalendarCell[] => {
       date,
       inMonth: false,
       hasEvents: eventDates.value.has(date),
+      accent: accentByDate.value.get(date) ?? null,
       isSelected: date === selectedDate.value,
       isToday: date === todayIso,
     })
@@ -318,7 +330,10 @@ watch([viewYear, viewMonth], () => {
           class="schedule-calendar__day"
           :class="{
             'schedule-calendar__day--outside': !cell.inMonth,
-            'schedule-calendar__day--has-event': cell.hasEvents,
+            'schedule-calendar__day--has-event': cell.hasEvents && !cell.accent,
+            'schedule-calendar__day--accent-orange': cell.accent === 'orange',
+            'schedule-calendar__day--accent-blue': cell.accent === 'blue',
+            'schedule-calendar__day--accent-purple': cell.accent === 'purple',
             'schedule-calendar__day--selected': cell.isSelected,
             'schedule-calendar__day--today': cell.isToday,
           }"
@@ -343,6 +358,9 @@ watch([viewYear, viewMonth], () => {
           :class="{
             'schedule-card--group': isGroupSlot(row),
             'schedule-card--expanded': isGroupSlot(row) && isExpanded(row, i),
+            'schedule-card--accent-orange': row.accent === 'orange',
+            'schedule-card--accent-blue': row.accent === 'blue',
+            'schedule-card--accent-purple': row.accent === 'purple',
           }"
         >
           <template v-if="isGroupSlot(row)">
@@ -578,6 +596,75 @@ watch([viewYear, viewMonth], () => {
   background: rgb(193 173 255 / 0.45);
 }
 
+.schedule-calendar__day--accent-orange:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-orange) 58%, #fff);
+  border-color: rgb(var(--unit-orange-rgb) / 0.72);
+}
+
+.schedule-calendar__day--accent-orange:not(.schedule-calendar__day--selected):hover {
+  background: color-mix(in srgb, var(--unit-orange) 72%, #fff);
+  border-color: var(--unit-orange);
+}
+
+.schedule-calendar__day--accent-orange .schedule-calendar__day-num {
+  color: color-mix(in srgb, var(--unit-orange) 28%, #4a2208);
+  font-weight: 700;
+}
+
+.schedule-calendar__day--outside.schedule-calendar__day--accent-orange:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-orange) 32%, #fff);
+}
+
+.schedule-calendar__day--accent-orange .schedule-calendar__dot {
+  background: var(--unit-orange);
+}
+
+.schedule-calendar__day--accent-blue:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-blue) 48%, #fff);
+  border-color: rgb(var(--unit-blue-rgb) / 0.68);
+}
+
+.schedule-calendar__day--accent-blue:not(.schedule-calendar__day--selected):hover {
+  background: color-mix(in srgb, var(--unit-blue) 62%, #fff);
+  border-color: var(--unit-blue);
+}
+
+.schedule-calendar__day--accent-blue .schedule-calendar__day-num {
+  color: color-mix(in srgb, var(--unit-blue) 55%, #0a1a5c);
+  font-weight: 700;
+}
+
+.schedule-calendar__day--outside.schedule-calendar__day--accent-blue:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-blue) 26%, #fff);
+}
+
+.schedule-calendar__day--accent-blue .schedule-calendar__dot {
+  background: var(--unit-blue);
+}
+
+.schedule-calendar__day--accent-purple:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-purple) 58%, #fff);
+  border-color: rgb(var(--unit-purple-rgb) / 0.72);
+}
+
+.schedule-calendar__day--accent-purple:not(.schedule-calendar__day--selected):hover {
+  background: color-mix(in srgb, var(--unit-purple) 72%, #fff);
+  border-color: var(--unit-purple);
+}
+
+.schedule-calendar__day--accent-purple .schedule-calendar__day-num {
+  color: color-mix(in srgb, var(--unit-purple) 40%, #2a1460);
+  font-weight: 700;
+}
+
+.schedule-calendar__day--outside.schedule-calendar__day--accent-purple:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-purple) 32%, #fff);
+}
+
+.schedule-calendar__day--accent-purple .schedule-calendar__dot {
+  background: var(--unit-purple);
+}
+
 .schedule-calendar__day--selected {
   background: var(--palette-blue);
   border-color: var(--palette-blue);
@@ -655,6 +742,84 @@ watch([viewYear, viewMonth], () => {
   overflow: hidden;
 }
 
+.schedule-card--accent-orange {
+  border: 2.5px solid var(--unit-orange);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 22px rgb(var(--unit-orange-rgb) / 0.28);
+}
+
+.schedule-card--accent-orange:hover {
+  border-color: var(--unit-orange);
+  box-shadow: 0 10px 28px rgb(var(--unit-orange-rgb) / 0.38);
+}
+
+.schedule-card--accent-orange .schedule-card__facts,
+.schedule-card--accent-orange .schedule-card__time {
+  color: var(--unit-orange);
+}
+
+.schedule-card--accent-orange .schedule-card__group-intro {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--unit-orange-rgb) / 0.14) 0%,
+    transparent 100%
+  );
+  border-top-color: rgb(var(--unit-orange-rgb) / 0.28);
+}
+
+.schedule-card--accent-blue {
+  border: 2.5px solid var(--unit-blue);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 22px rgb(var(--unit-blue-rgb) / 0.24);
+}
+
+.schedule-card--accent-blue:hover {
+  border-color: var(--unit-blue);
+  box-shadow: 0 10px 28px rgb(var(--unit-blue-rgb) / 0.34);
+}
+
+.schedule-card--accent-blue .schedule-card__facts,
+.schedule-card--accent-blue .schedule-card__time {
+  color: var(--unit-blue);
+}
+
+.schedule-card--accent-blue .schedule-card__group-intro {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--unit-blue-rgb) / 0.12) 0%,
+    transparent 100%
+  );
+  border-top-color: rgb(var(--unit-blue-rgb) / 0.24);
+}
+
+.schedule-card--accent-purple {
+  border: 2.5px solid var(--unit-purple);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 22px rgb(var(--unit-purple-rgb) / 0.26);
+}
+
+.schedule-card--accent-purple:hover {
+  border-color: var(--unit-purple);
+  box-shadow: 0 10px 28px rgb(var(--unit-purple-rgb) / 0.36);
+}
+
+.schedule-card--accent-purple .schedule-card__facts,
+.schedule-card--accent-purple .schedule-card__time {
+  color: var(--unit-purple);
+}
+
+.schedule-card--accent-purple .schedule-card__group-intro {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--unit-purple-rgb) / 0.14) 0%,
+    transparent 100%
+  );
+  border-top-color: rgb(var(--unit-purple-rgb) / 0.28);
+}
+
 .schedule-card__group-toggle {
   display: flex;
   width: 100%;
@@ -673,6 +838,21 @@ watch([viewYear, viewMonth], () => {
 
 .schedule-card__group-toggle:hover .schedule-card__name {
   color: var(--palette-blue);
+}
+
+.schedule-card--accent-orange .schedule-card__group-toggle:hover .schedule-card__name,
+.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-orange);
+}
+
+.schedule-card--accent-blue .schedule-card__group-toggle:hover .schedule-card__name,
+.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-blue);
+}
+
+.schedule-card--accent-purple .schedule-card__group-toggle:hover .schedule-card__name,
+.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-purple);
 }
 
 .schedule-card__group-toggle:focus-visible {
@@ -753,6 +933,30 @@ watch([viewYear, viewMonth], () => {
   color: var(--palette-blue);
 }
 
+.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-orange);
+}
+
+.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-blue);
+}
+
+.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-purple);
+}
+
+.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-orange);
+}
+
+.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-blue);
+}
+
+.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
+  color: var(--unit-purple);
+}
+
 .schedule-card__item-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -810,6 +1014,7 @@ watch([viewYear, viewMonth], () => {
   font-size: 0.98rem;
   line-height: 1.5;
   font-weight: 600;
+  transition: color 0.15s ease;
 }
 
 @media (max-width: 860px) {

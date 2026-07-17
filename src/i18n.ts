@@ -145,6 +145,31 @@ const enAugSetCPrograms = [
   },
 ] as const
 
+/** 單元一節目標題（中英），供作品字卡橘色外框對應 */
+export const UNIT_ONE_PROGRAM_TITLES = [
+  ...zhAugSharedPrograms.map((p) => p.name),
+  ...enAugSharedPrograms.map((p) => p.name),
+] as const
+
+/** 單元二節目標題（中英） */
+export const UNIT_TWO_PROGRAM_TITLES = [
+  ...zhAugSetBPrograms.map((p) => p.name),
+  ...enAugSetBPrograms.map((p) => p.name),
+] as const
+
+/** 單元三節目標題（中英） */
+export const UNIT_THREE_PROGRAM_TITLES = [
+  ...zhAugSetCPrograms.map((p) => p.name),
+  ...enAugSetCPrograms.map((p) => p.name),
+] as const
+
+/** 作品字卡／行事曆：單元色對應（一橘、二藍、三紫） */
+export const UNIT_ACCENT_PROGRAM_GROUPS = [
+  { accent: 'orange' as const, titles: UNIT_ONE_PROGRAM_TITLES },
+  { accent: 'blue' as const, titles: UNIT_TWO_PROGRAM_TITLES },
+  { accent: 'purple' as const, titles: UNIT_THREE_PROGRAM_TITLES },
+] as const
+
 /** 8/23 節目四 */
 const AUG_SET_D_DATES = ['2026-08-23'] as const
 
@@ -240,18 +265,21 @@ export const messages = {
           date,
           name: '單元一',
           groupIntro: zhUnitOneIntro,
+          accent: 'orange' as const,
           items: zhAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
           name: '單元二',
           groupIntro: zhUnitTwoIntro,
+          accent: 'blue' as const,
           items: zhAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
           name: '單元三',
           groupIntro: zhUnitThreeIntro,
+          accent: 'purple' as const,
           items: zhAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({
@@ -437,18 +465,21 @@ export const messages = {
           date,
           name: 'Program 1',
           groupIntro: enUnitOneIntro,
+          accent: 'orange' as const,
           items: enAugSharedPrograms,
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
           name: 'Program 2',
           groupIntro: enUnitTwoIntro,
+          accent: 'blue' as const,
           items: enAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
           name: 'Program 3',
           groupIntro: enUnitThreeIntro,
+          accent: 'purple' as const,
           items: enAugSetCPrograms,
         })),
         ...AUG_SET_D_DATES.map((date) => ({

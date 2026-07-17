@@ -1,5 +1,5 @@
 import type { Lang } from '@/i18n'
-import type { WorkArtist, WorkCard } from '@/types/workCard'
+import type { WorkArtist, WorkArtistBioSource, WorkCard } from '@/types/workCard'
 
 type UnzipMedia = {
   url?: string
@@ -32,6 +32,9 @@ export type UnzipWork = {
   state?: string | null
   note?: string | null
   note_zh_tw?: string | null
+  /** 部分作品介紹寫在 proposal，而非 note */
+  proposal?: string | null
+  proposal_zh_tw?: string | null
   featured_photo_media?: UnzipMedia | null
   image_1920_media?: UnzipMedia | null
   photos?: UnzipPhoto[] | null
@@ -52,12 +55,70 @@ type UnzipWorksResponse = {
 
 const DEFAULT_WORKS_URL = 'https://unzip.clab.org.tw/api/v1/projects/119/works'
 const WORKS_PAGE_SIZE = 100
+const WORK_DETAIL_BASE = 'https://unzip.clab.org.tw/api/v1/works'
 
 function buildPaginatedWorksUrl(apiUrl: string, offset: number, limit = WORKS_PAGE_SIZE): string {
   const url = new URL(apiUrl)
   url.searchParams.set('limit', String(limit))
   url.searchParams.set('offset', String(offset))
   return url.toString()
+}
+
+function hasWorkDescription(work: UnzipWork): boolean {
+  return !!(
+    work.note?.trim() ||
+    work.note_zh_tw?.trim() ||
+    work.proposal?.trim() ||
+    work.proposal_zh_tw?.trim()
+  )
+}
+
+async function fetchWorkDetail(
+  workId: number,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'> | null> {
+  const res = await fetch(`${WORK_DETAIL_BASE}/${workId}`, {
+    signal,
+    headers: {
+      Authorization: `Api-Key ${apiKey}`,
+      Accept: 'application/json',
+    },
+  })
+
+  if (!res.ok) return null
+
+  const json = (await res.json()) as {
+    data?: Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'>
+  }
+  return json.data ?? null
+}
+
+/** 列表 API 可能沒有 note；缺介紹時改抓單筆詳情的 proposal / note */
+async function enrichMissingWorkDescriptions(
+  works: UnzipWork[],
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<UnzipWork[]> {
+  const pending = works.filter((work) => !hasWorkDescription(work))
+  if (!pending.length) return works
+
+  await Promise.all(
+    pending.map(async (work) => {
+      try {
+        const detail = await fetchWorkDetail(work.id, apiKey, signal)
+        if (!detail) return
+        work.note = work.note?.trim() || detail.note || null
+        work.note_zh_tw = work.note_zh_tw?.trim() || detail.note_zh_tw || null
+        work.proposal = work.proposal?.trim() || detail.proposal || null
+        work.proposal_zh_tw = work.proposal_zh_tw?.trim() || detail.proposal_zh_tw || null
+      } catch {
+        /* 單筆失敗不影響其餘作品 */
+      }
+    }),
+  )
+
+  return works
 }
 
 export async function fetchProjectWorks(
@@ -101,7 +162,7 @@ export async function fetchProjectWorks(
     offset += batch.length
   }
 
-  return allWorks
+  return enrichMissingWorkDescriptions(allWorks, apiKey, signal)
 }
 
 function pickLocalizedText(lang: Lang, zh?: string | null, en?: string | null): string {
@@ -173,6 +234,25 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
   }
 
   return artists
+}
+
+function buildArtistBioFallback(
+  lang: Lang,
+  work: UnzipWork,
+): WorkArtistBioSource | undefined {
+  const contributorsHavePhotos = (work.contributors ?? []).some(
+    (author) => !!author.image_1920_media?.url?.trim(),
+  )
+  if (!contributorsHavePhotos) return undefined
+
+  const collective = (work.collectives ?? []).find(
+    (author) => author.id != null && !!pickAuthorName(lang, author),
+  )
+  if (collective?.id == null) return undefined
+
+  const name = pickAuthorName(lang, collective)
+  if (!name) return undefined
+  return { id: collective.id, authorType: 'collective', name }
 }
 
 function stripHtmlText(html: string): string {
@@ -257,10 +337,14 @@ export async function fetchArtistBio(
 
 export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
   const title = pickLocalizedText(lang, work.title_zh_tw, work.title)
-  const body = stripHtmlText(pickLocalizedText(lang, work.note_zh_tw, work.note))
+  const body = stripHtmlText(
+    pickLocalizedText(lang, work.note_zh_tw, work.note) ||
+      pickLocalizedText(lang, work.proposal_zh_tw, work.proposal),
+  )
   const gallery = buildGallery(work)
   const image = gallery[0] ?? ''
   const artists = buildArtists(lang, work)
+  const artistBioFallback = buildArtistBioFallback(lang, work)
 
   return {
     id: work.id,
@@ -271,6 +355,7 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
     subtitle: buildSubtitle(lang, work, title),
     body,
     ...(artists.length > 0 ? { artists } : {}),
+    ...(artistBioFallback ? { artistBioFallback } : {}),
   }
 }
 

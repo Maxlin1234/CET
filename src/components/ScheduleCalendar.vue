@@ -933,27 +933,30 @@ watch([viewYear, viewMonth], () => {
   color: var(--palette-blue);
 }
 
-.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
+.schedule-card--accent-orange .schedule-card__item-btn:hover {
+  background: rgb(var(--unit-orange-rgb) / 0.1);
+}
+
+.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name,
+.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__creator {
   color: var(--unit-orange);
 }
 
-.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
+.schedule-card--accent-blue .schedule-card__item-btn:hover {
+  background: rgb(var(--unit-blue-rgb) / 0.1);
+}
+
+.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name,
+.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__creator {
   color: var(--unit-blue);
 }
 
-.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
-  color: var(--unit-purple);
+.schedule-card--accent-purple .schedule-card__item-btn:hover {
+  background: rgb(var(--unit-purple-rgb) / 0.12);
 }
 
-.schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
-  color: var(--unit-orange);
-}
-
-.schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
-  color: var(--unit-blue);
-}
-
-.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
+.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name,
+.schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__creator {
   color: var(--unit-purple);
 }
 
@@ -972,6 +975,7 @@ watch([viewYear, viewMonth], () => {
   font-size: 0.9rem;
   line-height: 1.45;
   color: rgb(var(--blue-rgb) / 0.78);
+  transition: color 0.15s ease;
 }
 
 .schedule-card__facts {
@@ -991,9 +995,23 @@ watch([viewYear, viewMonth], () => {
 }
 
 .schedule-card:hover {
-  border-color: rgb(var(--orange-rgb) / 0.42);
   box-shadow: 0 8px 24px rgb(var(--blue-rgb) / 0.14);
   transform: translateY(-2px);
+}
+
+.schedule-card--accent-orange:hover {
+  border-color: var(--unit-orange);
+  box-shadow: 0 10px 28px rgb(var(--unit-orange-rgb) / 0.38);
+}
+
+.schedule-card--accent-blue:hover {
+  border-color: var(--unit-blue);
+  box-shadow: 0 10px 28px rgb(var(--unit-blue-rgb) / 0.34);
+}
+
+.schedule-card--accent-purple:hover {
+  border-color: var(--unit-purple);
+  box-shadow: 0 10px 28px rgb(var(--unit-purple-rgb) / 0.36);
 }
 
 .schedule-card__meta {

@@ -2007,39 +2007,37 @@ function scrollToPageTop() {
             class="works-detail__header"
             :class="{ 'works-detail__header--navigable': worksDetailHasArtistPage }"
           >
-            <div class="works-detail__header-nav">
+            <h2 id="works-detail-title" class="works-detail__dialog-title" tabindex="-1">
+              {{ worksDetailCard.title }}
+            </h2>
+            <div
+              class="works-detail__tabs"
+              role="tablist"
+              :aria-label="worksDetailCard.title"
+            >
               <button
-                v-if="worksDetailHasArtistPage"
                 type="button"
-                class="works-detail__page-arrow works-detail__page-arrow--prev"
-                :disabled="worksDetailPageIx === 0"
-                :aria-label="txt.works.detailPagePrevAria"
-                @click="worksDetailStepPage(-1)"
-              />
-              <div
-                class="works-detail__header-swipe"
-                :class="{ 'works-detail__header-swipe--artist': worksDetailPageIx === 1 }"
+                class="works-detail__tab"
+                :class="{ 'works-detail__tab--active': worksDetailPageIx === 0 }"
+                role="tab"
+                :aria-selected="worksDetailPageIx === 0"
+                aria-controls="works-detail-page-work"
+                @click="worksDetailSetPage(0)"
               >
-                <div class="works-detail__header-track">
-                  <h2 id="works-detail-title" class="works-detail__heading" tabindex="-1">
-                    {{ worksDetailCard.title }}
-                  </h2>
-                  <h2
-                    class="works-detail__heading works-detail__heading--artist"
-                    :aria-hidden="worksDetailPageIx === 0 ? 'true' : undefined"
-                  >
-                    {{ worksDetailArtistHeading }}
-                  </h2>
-                </div>
-              </div>
+                {{ txt.works.detailWorkTab }}
+              </button>
               <button
                 v-if="worksDetailHasArtistPage"
                 type="button"
-                class="works-detail__page-arrow works-detail__page-arrow--next"
-                :disabled="worksDetailPageIx === 1"
-                :aria-label="txt.works.detailPageNextAria"
-                @click="worksDetailStepPage(1)"
-              />
+                class="works-detail__tab"
+                :class="{ 'works-detail__tab--active': worksDetailPageIx === 1 }"
+                role="tab"
+                :aria-selected="worksDetailPageIx === 1"
+                aria-controls="works-detail-page-artist"
+                @click="worksDetailSetPage(1)"
+              >
+                {{ txt.works.detailArtistTab }}
+              </button>
             </div>
             <button
               type="button"
@@ -2058,81 +2056,89 @@ function scrollToPageTop() {
               'works-detail__pages--single': !worksDetailHasArtistPage,
             }"
           >
-            <div class="works-detail__page works-detail__page--work">
-          <div class="works-detail__main">
             <div
-              class="works-detail__media"
-              :class="{ 'works-detail__media--with-artists': worksDetailArtists.length > 0 }"
+              id="works-detail-page-work"
+              class="works-detail__page works-detail__page--work"
+              role="tabpanel"
+              :aria-hidden="worksDetailPageIx === 1 ? 'true' : undefined"
             >
-              <div class="works-detail__gallery">
+              <div class="works-detail__main">
                 <div
-                  class="works-detail__carousel"
-                  @touchstart.passive="onWorksDetailTouchStart"
-                  @touchend="onWorksDetailTouchEnd"
+                  class="works-detail__media"
+                  :class="{ 'works-detail__media--with-artists': worksDetailArtists.length > 0 }"
                 >
-                <button
-                  v-if="worksDetailGalleryUrls.length > 1"
-                  type="button"
-                  class="works-detail__arrow works-detail__arrow--prev"
-                  :aria-label="txt.works.detailPrevAria"
-                  @click="worksDetailStepSlide(-1)"
-                />
-                <div class="works-detail__viewport">
-                  <template v-if="worksDetailGalleryUrls.length">
-                    <img
-                      v-for="(url, si) in worksDetailGalleryUrls"
-                      :key="`${worksDetailIndex}-${si}-${url}`"
-                      :src="url"
-                      :alt="worksDetailCard.title"
-                      class="works-detail__img"
-                      :class="{ 'works-detail__img--active': worksDetailActiveSlideIx === si }"
-                      decoding="async"
-                    />
-                  </template>
-                  <div v-else class="works-detail__placeholder" aria-hidden="true" />
+                  <div class="works-detail__gallery">
+                    <div
+                      class="works-detail__carousel"
+                      @touchstart.passive="onWorksDetailTouchStart"
+                      @touchend="onWorksDetailTouchEnd"
+                    >
+                      <button
+                        v-if="worksDetailGalleryUrls.length > 1"
+                        type="button"
+                        class="works-detail__arrow works-detail__arrow--prev"
+                        :aria-label="txt.works.detailPrevAria"
+                        @click="worksDetailStepSlide(-1)"
+                      />
+                      <div class="works-detail__viewport">
+                        <template v-if="worksDetailGalleryUrls.length">
+                          <img
+                            v-for="(url, si) in worksDetailGalleryUrls"
+                            :key="`${worksDetailIndex}-${si}-${url}`"
+                            :src="url"
+                            :alt="worksDetailCard.title"
+                            class="works-detail__img"
+                            :class="{ 'works-detail__img--active': worksDetailActiveSlideIx === si }"
+                            decoding="async"
+                          />
+                        </template>
+                        <div v-else class="works-detail__placeholder" aria-hidden="true" />
+                      </div>
+                      <button
+                        v-if="worksDetailGalleryUrls.length > 1"
+                        type="button"
+                        class="works-detail__arrow works-detail__arrow--next"
+                        :aria-label="txt.works.detailNextAria"
+                        @click="worksDetailStepSlide(1)"
+                      />
+                    </div>
+                    <div
+                      v-if="worksDetailGalleryUrls.length > 1"
+                      class="works-detail__dots"
+                      role="tablist"
+                    >
+                      <button
+                        v-for="(_u, di) in worksDetailGalleryUrls"
+                        :key="'wdot-' + di"
+                        type="button"
+                        class="works-detail__dot"
+                        :class="{ 'works-detail__dot--active': worksDetailSlideIx === di }"
+                        :aria-label="`${di + 1} / ${worksDetailGalleryUrls.length}`"
+                        :aria-current="worksDetailSlideIx === di ? 'true' : undefined"
+                        @click="worksDetailGoToSlide(di)"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <button
-                  v-if="worksDetailGalleryUrls.length > 1"
-                  type="button"
-                  class="works-detail__arrow works-detail__arrow--next"
-                  :aria-label="txt.works.detailNextAria"
-                  @click="worksDetailStepSlide(1)"
-                />
+                <div class="works-detail__prose">
+                  <div class="works-detail__body">
+                    <p
+                      v-for="(para, bi) in worksDetailBodyParagraphs"
+                      :key="'wbody-' + bi"
+                      class="works-detail__para"
+                    >
+                      {{ para }}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div
-                v-if="worksDetailGalleryUrls.length > 1"
-                class="works-detail__dots"
-                role="tablist"
-              >
-                <button
-                  v-for="(_u, di) in worksDetailGalleryUrls"
-                  :key="'wdot-' + di"
-                  type="button"
-                  class="works-detail__dot"
-                  :class="{ 'works-detail__dot--active': worksDetailSlideIx === di }"
-                  :aria-label="`${di + 1} / ${worksDetailGalleryUrls.length}`"
-                  :aria-current="worksDetailSlideIx === di ? 'true' : undefined"
-                  @click="worksDetailGoToSlide(di)"
-                />
-              </div>
-              </div>
-            </div>
-            <div class="works-detail__prose">
-              <div class="works-detail__body">
-                <p
-                  v-for="(para, bi) in worksDetailBodyParagraphs"
-                  :key="'wbody-' + bi"
-                  class="works-detail__para"
-                >
-                  {{ para }}
-                </p>
-              </div>
-            </div>
-          </div>
             </div>
             <div
               v-if="worksDetailHasArtistPage"
+              id="works-detail-page-artist"
               class="works-detail__page works-detail__page--artist"
+              role="tabpanel"
+              :aria-hidden="worksDetailPageIx === 0 ? 'true' : undefined"
             >
               <div class="works-detail__artist-main">
                 <div class="works-detail__artist-media" :aria-label="txt.works.detailArtistsAria">
@@ -2148,7 +2154,6 @@ function scrollToPageTop() {
                       loading="lazy"
                       decoding="async"
                     />
-                    <figcaption class="works-detail__artist-name">{{ artist.name }}</figcaption>
                   </figure>
                 </div>
                 <div class="works-detail__artist-prose">
@@ -2157,7 +2162,7 @@ function scrollToPageTop() {
                       v-if="worksDetailArtistBioParagraphs(artist).length"
                       class="works-detail__artist-bio"
                     >
-                      <h3 v-if="worksDetailArtists.length > 1" class="works-detail__artist-bio-name">
+                      <h3 class="works-detail__artist-bio-name">
                         {{ artist.name }}
                       </h3>
                       <p
@@ -2177,7 +2182,7 @@ function scrollToPageTop() {
                     class="works-detail__artist-bio"
                   >
                     <h3 class="works-detail__artist-bio-name">
-                      {{ worksDetailArtistBioFallback?.name }}
+                      {{ worksDetailArtistBioFallback?.name || worksDetailArtistHeading }}
                     </h3>
                     <p
                       v-for="(para, pi) in worksDetailFallbackBioParagraphs"
@@ -2187,21 +2192,31 @@ function scrollToPageTop() {
                       {{ para }}
                     </p>
                   </div>
-                  <p
-                    v-if="worksDetailArtistBiosLoading"
-                    class="works-detail__artist-bio-empty"
-                  >
-                    {{ txt.works.detailArtistBioLoading }}
-                  </p>
-                  <p
-                    v-else-if="
-                      !worksDetailHasIndividualArtistBio &&
-                      !worksDetailFallbackBioParagraphs.length
+                  <template
+                    v-if="
+                      worksDetailArtistBiosLoading ||
+                      (
+                        !worksDetailHasIndividualArtistBio &&
+                        !worksDetailFallbackBioParagraphs.length
+                      )
                     "
-                    class="works-detail__artist-bio-empty"
                   >
-                    {{ txt.works.detailArtistBioEmpty }}
-                  </p>
+                    <h3 class="works-detail__artist-bio-name">
+                      {{ worksDetailArtistHeading }}
+                    </h3>
+                    <p
+                      v-if="worksDetailArtistBiosLoading"
+                      class="works-detail__artist-bio-empty"
+                    >
+                      {{ txt.works.detailArtistBioLoading }}
+                    </p>
+                    <p
+                      v-else
+                      class="works-detail__artist-bio-empty"
+                    >
+                      {{ txt.works.detailArtistBioEmpty }}
+                    </p>
+                  </template>
                 </div>
               </div>
             </div>
@@ -2249,9 +2264,11 @@ function scrollToPageTop() {
   --unit-orange: #ff8f3d;
   --unit-blue: #3d6dff;
   --unit-purple: #b48cff;
+  --unit-yellow: #ffe14a;
   --unit-orange-rgb: 255 143 61;
   --unit-blue-rgb: 61 109 255;
   --unit-purple-rgb: 180 140 255;
+  --unit-yellow-rgb: 255 225 74;
   --blue-rgb: 27 47 158;
   --orange-rgb: 217 123 74;
   --purple-rgb: 139 111 212;
@@ -4266,7 +4283,7 @@ a:hover {
 }
 
 .work-card--accent-orange {
-  border: 2.5px solid var(--unit-orange);
+  border: 0.2px solid var(--unit-orange);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 8px 26px rgb(var(--unit-orange-rgb) / 0.3);
@@ -4292,7 +4309,7 @@ a:hover {
 }
 
 .work-card--accent-blue {
-  border: 2.5px solid var(--unit-blue);
+  border: 0.2px solid var(--unit-blue);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 8px 26px rgb(var(--unit-blue-rgb) / 0.26);
@@ -4318,7 +4335,7 @@ a:hover {
 }
 
 .work-card--accent-purple {
-  border: 2.5px solid var(--unit-purple);
+  border: 0.2px solid var(--unit-purple);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 8px 26px rgb(var(--unit-purple-rgb) / 0.28);
@@ -4466,6 +4483,80 @@ a:hover {
 
 .works-detail__header--navigable {
   padding-bottom: 0.95rem;
+}
+
+.works-detail__dialog-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.works-detail__tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.85rem, 3vw, 1.4rem);
+  width: 100%;
+  margin: 0;
+  padding: 0 2.85rem;
+  box-sizing: border-box;
+}
+
+.works-detail__tab {
+  position: relative;
+  margin: 0;
+  padding: 0.2rem 0 0.35rem;
+  border: none;
+  background: transparent;
+  color: rgb(var(--blue-rgb) / 0.56);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: clamp(0.95rem, 2.5vw, 1.08rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.works-detail__tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.18s ease;
+}
+
+.works-detail__tab:hover,
+.works-detail__tab--active {
+  color: var(--on-accent);
+}
+
+.works-detail__tab:hover {
+  transform: translateY(-1px);
+}
+
+.works-detail__tab--active::after {
+  transform: scaleX(1);
+}
+
+.works-detail__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .works-detail__header-nav {
@@ -4979,10 +5070,12 @@ a:hover {
 }
 
 .works-detail__artist-bio-name {
-  margin: 0 0 0.65rem;
-  font-family: var(--font-body);
-  font-size: 1rem;
+  margin: 0 0 0.75rem;
+  font-family: var(--font-title);
+  font-size: clamp(1.05rem, 2.4vw, 1.25rem);
   font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
   color: var(--on-accent);
 }
 
@@ -5062,24 +5155,14 @@ a:hover {
     padding: 0.95rem 1rem 0.85rem;
   }
 
-  .works-detail__header-nav {
-    padding-right: 2rem;
-    gap: 0.1rem;
+  .works-detail__tabs {
+    gap: 0.9rem;
+    padding: 0 2.5rem;
   }
 
-  .works-detail__header-swipe {
-    width: min(18rem, calc(100% - 4.5rem));
-  }
-
-  .works-detail__heading {
-    padding: 0;
-    font-size: 1.1rem;
-  }
-
-  .works-detail__page-arrow {
-    width: 1.85rem;
-    height: 1.85rem;
-    font-size: 1.1rem;
+  .works-detail__tab {
+    font-size: 0.98rem;
+    letter-spacing: 0.08em;
   }
 
   /** 手機：圖在上、文在下 */
@@ -5187,13 +5270,14 @@ a:hover {
     padding: 0.85rem 0.85rem 0.75rem;
   }
 
-  .works-detail__heading {
-    font-size: 1.05rem;
-    padding: 0;
+  .works-detail__tabs {
+    gap: 0.7rem;
+    padding: 0 2.35rem;
   }
 
-  .works-detail__header-nav {
-    padding-right: 1.85rem;
+  .works-detail__tab {
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
   }
 
   .works-detail__main {

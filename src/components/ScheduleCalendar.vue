@@ -147,33 +147,9 @@ const calendarCells = computed((): CalendarCell[] => {
 
 const selectedSlots = computed(() => slotsByDate.value.get(selectedDate.value) ?? [])
 
-/** 已展開的群組場次 index（如「節目一」） */
-const expandedSlotKeys = ref<Set<string>>(new Set())
-
-function slotKey(row: ScheduleCopy['slots'][number], index: number) {
-  return `${row.date}-${index}-${row.name}`
-}
-
 function isGroupSlot(row: ScheduleCopy['slots'][number]) {
   return Array.isArray(row.items) && row.items.length > 0
 }
-
-function isExpanded(row: ScheduleCopy['slots'][number], index: number) {
-  return expandedSlotKeys.value.has(slotKey(row, index))
-}
-
-function toggleGroupSlot(row: ScheduleCopy['slots'][number], index: number) {
-  if (!isGroupSlot(row)) return
-  const key = slotKey(row, index)
-  const next = new Set(expandedSlotKeys.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  expandedSlotKeys.value = next
-}
-
-watch(selectedDate, () => {
-  expandedSlotKeys.value = new Set()
-})
 
 function normalizeProgramTitle(value: string) {
   return value
@@ -334,6 +310,7 @@ watch([viewYear, viewMonth], () => {
             'schedule-calendar__day--accent-orange': cell.accent === 'orange',
             'schedule-calendar__day--accent-blue': cell.accent === 'blue',
             'schedule-calendar__day--accent-purple': cell.accent === 'purple',
+            'schedule-calendar__day--accent-yellow': cell.accent === 'yellow',
             'schedule-calendar__day--selected': cell.isSelected,
             'schedule-calendar__day--today': cell.isToday,
           }"
@@ -357,33 +334,20 @@ watch([viewYear, viewMonth], () => {
           class="schedule-card"
           :class="{
             'schedule-card--group': isGroupSlot(row),
-            'schedule-card--expanded': isGroupSlot(row) && isExpanded(row, i),
             'schedule-card--accent-orange': row.accent === 'orange',
             'schedule-card--accent-blue': row.accent === 'blue',
             'schedule-card--accent-purple': row.accent === 'purple',
+            'schedule-card--accent-yellow': row.accent === 'yellow',
           }"
         >
           <template v-if="isGroupSlot(row)">
-            <button
-              type="button"
-              class="schedule-card__group-toggle"
-              :aria-expanded="isExpanded(row, i)"
-              @click="toggleGroupSlot(row, i)"
-            >
+            <div class="schedule-card__group-head">
               <span class="schedule-card__name">{{ row.name }}</span>
-              <span class="schedule-card__chevron" aria-hidden="true" />
-            </button>
-            <div
-              v-if="isExpanded(row, i) && row.groupIntro"
-              class="schedule-card__group-intro"
-            >
+            </div>
+            <div v-if="row.groupIntro" class="schedule-card__group-intro">
               <p class="schedule-card__group-intro-text">{{ row.groupIntro }}</p>
             </div>
-            <ul
-              v-if="isExpanded(row, i)"
-              class="schedule-card__items"
-              role="list"
-            >
+            <ul class="schedule-card__items" role="list">
               <li
                 v-for="(item, j) in row.items"
                 :key="`${row.date}-${i}-item-${j}`"
@@ -665,6 +629,29 @@ watch([viewYear, viewMonth], () => {
   background: var(--unit-purple);
 }
 
+.schedule-calendar__day--accent-yellow:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-yellow) 58%, #fff);
+  border-color: rgb(var(--unit-yellow-rgb) / 0.72);
+}
+
+.schedule-calendar__day--accent-yellow:not(.schedule-calendar__day--selected):hover {
+  background: color-mix(in srgb, var(--unit-yellow) 72%, #fff);
+  border-color: var(--unit-yellow);
+}
+
+.schedule-calendar__day--accent-yellow .schedule-calendar__day-num {
+  color: color-mix(in srgb, var(--unit-yellow) 26%, #4a3608);
+  font-weight: 700;
+}
+
+.schedule-calendar__day--outside.schedule-calendar__day--accent-yellow:not(.schedule-calendar__day--selected) {
+  background: color-mix(in srgb, var(--unit-yellow) 32%, #fff);
+}
+
+.schedule-calendar__day--accent-yellow .schedule-calendar__dot {
+  background: var(--unit-yellow);
+}
+
 .schedule-calendar__day--selected {
   background: var(--palette-blue);
   border-color: var(--palette-blue);
@@ -820,59 +807,52 @@ watch([viewYear, viewMonth], () => {
   border-top-color: rgb(var(--unit-purple-rgb) / 0.28);
 }
 
-.schedule-card__group-toggle {
+.schedule-card--accent-yellow {
+  border: 2.5px solid var(--unit-yellow);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 8px 22px rgb(var(--unit-yellow-rgb) / 0.26);
+}
+
+.schedule-card--accent-yellow:hover {
+  border-color: var(--unit-yellow);
+  box-shadow: 0 10px 28px rgb(var(--unit-yellow-rgb) / 0.36);
+}
+
+.schedule-card--accent-yellow .schedule-card__facts,
+.schedule-card--accent-yellow .schedule-card__time {
+  color: color-mix(in srgb, var(--unit-yellow) 72%, #6b4e0a);
+}
+
+.schedule-card--accent-yellow .schedule-card__group-intro {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--unit-yellow-rgb) / 0.14) 0%,
+    transparent 100%
+  );
+  border-top-color: rgb(var(--unit-yellow-rgb) / 0.28);
+}
+
+.schedule-card__group-head {
   display: flex;
   width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0;
-  padding: 1rem 1.1rem;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  padding: 1rem 1.1rem 0.85rem;
 }
 
-.schedule-card__group-toggle:hover .schedule-card__name {
-  color: var(--palette-blue);
-}
-
-.schedule-card--accent-orange .schedule-card__group-toggle:hover .schedule-card__name,
 .schedule-card--accent-orange .schedule-card__item-btn:hover .schedule-card__name {
   color: var(--unit-orange);
 }
 
-.schedule-card--accent-blue .schedule-card__group-toggle:hover .schedule-card__name,
 .schedule-card--accent-blue .schedule-card__item-btn:hover .schedule-card__name {
   color: var(--unit-blue);
 }
 
-.schedule-card--accent-purple .schedule-card__group-toggle:hover .schedule-card__name,
 .schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name {
   color: var(--unit-purple);
-}
-
-.schedule-card__group-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.schedule-card__chevron {
-  flex-shrink: 0;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-  transition: transform 0.2s ease;
-  opacity: 0.7;
-}
-
-.schedule-card--expanded .schedule-card__chevron {
-  transform: rotate(225deg);
 }
 
 .schedule-card__group-intro {
@@ -958,6 +938,15 @@ watch([viewYear, viewMonth], () => {
 .schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__name,
 .schedule-card--accent-purple .schedule-card__item-btn:hover .schedule-card__creator {
   color: var(--unit-purple);
+}
+
+.schedule-card--accent-yellow .schedule-card__item-btn:hover {
+  background: rgb(var(--unit-yellow-rgb) / 0.14);
+}
+
+.schedule-card--accent-yellow .schedule-card__item-btn:hover .schedule-card__name,
+.schedule-card--accent-yellow .schedule-card__item-btn:hover .schedule-card__creator {
+  color: color-mix(in srgb, var(--unit-yellow) 72%, #6b4e0a);
 }
 
 .schedule-card__item-btn:focus-visible {

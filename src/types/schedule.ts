@@ -1,5 +1,5 @@
-/** 單元強調色：一橘、二藍、三紫 */
-export type ScheduleAccent = 'orange' | 'blue' | 'purple'
+/** 單元強調色：一橘、二藍、三紫、四黃 */
+export type ScheduleAccent = 'orange' | 'blue' | 'purple' | 'yellow'
 
 export type ScheduleProgram = {
   name: string

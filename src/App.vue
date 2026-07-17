@@ -1851,13 +1851,61 @@ function scrollToPageTop() {
         </div>
       </section>
 
-      <section id="map" class="section section--map-grad section--bottom">
+      <section id="map" class="section section--map-grad">
         <div class="section__inner">
           <h2 class="section__title">{{ txt.map.title }}</h2>
           <p class="map__hint">{{ txt.map.hint }}</p>
           <div class="map-area" role="region" :aria-label="txt.map.title">
             <img src="/map.jpeg" alt="map" class="map_img" />
           </div>
+        </div>
+      </section>
+
+      <section id="credits" class="section section--credits section--bottom">
+        <div class="section__inner section__inner--credits">
+          <h2 class="section__title">{{ txt.credits.title }}</h2>
+          <p class="credits__subtitle">{{ txt.credits.subtitle }}</p>
+
+          <div
+            v-for="(group, gi) in txt.credits.groups"
+            :key="`credits-g-${gi}`"
+            class="credits__group"
+          >
+            <div
+              v-for="(row, ri) in group"
+              :key="`credits-r-${gi}-${ri}`"
+              class="credits__row"
+            >
+              <span class="credits__role">{{ row.role }}</span>
+              <span class="credits__names">{{ row.names }}</span>
+            </div>
+          </div>
+
+          <div class="credits__group credits__group--artists">
+            <div class="credits__row credits__row--artists">
+              <span class="credits__role">{{ txt.credits.artists.role }}</span>
+              <span class="credits__names">{{ txt.credits.artists.names }}</span>
+            </div>
+          </div>
+
+          <ul class="credits__orgs" role="list">
+            <li
+              v-for="(org, oi) in txt.credits.orgs"
+              :key="`credits-org-${oi}`"
+              class="credits__org"
+            >
+              <span class="credits__org-role">{{ org.role }}</span>
+              <div v-if="org.logo" class="credits__org-logo-wrap">
+                <img
+                  class="credits__org-logo"
+                  :src="org.logo"
+                  :alt="org.name"
+                  decoding="async"
+                />
+              </div>
+              <span class="credits__org-name">{{ org.name }}</span>
+            </li>
+          </ul>
         </div>
       </section>
     </main>
@@ -3914,7 +3962,137 @@ a:hover {
   color: var(--text-on-light);
 }
 
+/** 製作團隊 */
+.section--credits {
+  position: relative;
+  background: #fff;
+  color: var(--text-on-surface);
+}
 
+.section--credits .section__title {
+  color: var(--text-on-light);
+  margin-bottom: 0.65rem;
+}
+
+.section__inner--credits {
+  max-width: 52rem;
+}
+
+.credits__subtitle {
+  margin: 0 0 2rem;
+  font-family: var(--font-title);
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-on-light);
+}
+
+.credits__group {
+  margin: 0 0 1.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.credits__group--artists {
+  margin-bottom: 2.25rem;
+}
+
+.credits__row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11.5rem) minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  align-items: start;
+}
+
+.credits__row--artists {
+  grid-template-columns: minmax(7.5rem, 11.5rem) minmax(0, 1fr);
+}
+
+.credits__role {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--text-on-light);
+  white-space: nowrap;
+}
+
+.credits__role::after {
+  content: '｜';
+  font-weight: 600;
+  opacity: 0.55;
+}
+
+.credits__names {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: rgb(var(--blue-rgb) / 0.88);
+}
+
+.credits__orgs {
+  list-style: none;
+  margin: 0;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid rgb(var(--blue-rgb) / 0.14);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem 1.5rem;
+}
+
+.credits__org {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.credits__org-role {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(var(--blue-rgb) / 0.7);
+}
+
+.credits__org-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 3.25rem;
+}
+
+.credits__org-logo {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: min(100%, 9.5rem);
+  object-fit: contain;
+}
+
+.credits__org-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-on-light);
+}
+
+@media (max-width: 720px) {
+  .credits__row,
+  .credits__row--artists {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .credits__role {
+    white-space: normal;
+  }
+
+  .credits__orgs {
+    grid-template-columns: 1fr;
+    gap: 1.35rem;
+  }
+}
 
 /** 作品介紹：Vanta CLOUDS 滿版底 */
 .section--works-board {

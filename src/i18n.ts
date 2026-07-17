@@ -388,6 +388,39 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         },
       ],
     },
+    credits: {
+      title: '製作團隊',
+      subtitle: 'FUTURE VISION LAB @ 晴空季',
+      groups: [
+        [
+          { role: '計畫主持人', names: '蔡奇宏' },
+          { role: '節目統籌', names: '廖苑喻、陳湘綺' },
+          { role: '技術統籌', names: '蔡奇宏' },
+          { role: '技術執行', names: '劉嘉昀、邱文雍、楊泓軒' },
+        ],
+        [
+          { role: '前期建築概念設計', names: '陽明交通大學建築研究所 JHStudio' },
+          { role: '建築工程', names: 'achy_made' },
+          { role: '聲場設計', names: 'C-LAB 臺灣聲響實驗室' },
+          { role: '音響系統統籌', names: '黑米創意工作室' },
+        ],
+        [
+          { role: '網站設計', names: '林瀚寬' },
+          { role: '靜態攝影', names: 'ANPIS FOTO 王世邦' },
+          { role: '動態攝影', names: '散步映畫有限公司' },
+        ],
+      ],
+      artists: {
+        role: '參與藝術家',
+        names:
+          '江戶未來世、加布里埃拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿加塔．史塔什丘克、冼筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．提爾．馬騰、Kivi, MONOCOLOR, Meuko! Meuko!, Fantastik Obsolete, Ribs＋塞夏斯',
+      },
+      orgs: [
+        { role: '主辦單位', name: 'C-LAB', logo: '/C-LAB.png' },
+        { role: '補助單位', name: '文化部', logo: '/文化部.png' },
+        { role: '執行單位', name: '未來視覺實驗室', logo: '/logo.svg' },
+      ],
+    },
     footer: {
       organizer: '主辦：C-LAB當代文化實驗場',
       contact: '聯絡： info@clab.org.tw',
@@ -612,6 +645,42 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
           body:
             'Light, shadow, and found objects sketch a vertical patio—air and time caught in architectural seams. Paths and sightlines are recalibrated to the patio scale.',
         },
+      ],
+    },
+    credits: {
+      title: 'Credit List',
+      subtitle: 'FUTURE VISION LAB @ Skyward',
+      groups: [
+        [
+          { role: 'Project Principal', names: 'Warrick TSAI' },
+          { role: 'Project Manager', names: 'Emma LIAO, CHEN Hsiang-Chi' },
+          { role: 'Technical Director', names: 'Warrick TSAI' },
+          { role: 'Technical Coordinator', names: 'LIU Chia-Yun, CHIU Wen-Yung, Snow YANG' },
+        ],
+        [
+          {
+            role: 'Preliminary Conceptual Design',
+            names: 'JHStudio, Department of Architecture, National Yang Ming Chiao Tung University',
+          },
+          { role: 'Architectural Fabrication', names: 'achy_made' },
+          { role: 'Sound Field Design', names: 'C-LAB Taiwan Sound Lab' },
+          { role: 'Sound System Coordination', names: 'BlackRice Studio' },
+        ],
+        [
+          { role: 'Website Design', names: 'LIN Han-Kuan' },
+          { role: 'Photo Documentation', names: 'ANPIS FOTO' },
+          { role: 'Video Documentation', names: 'Cinemaruku Co., Ltd.' },
+        ],
+      ],
+      artists: {
+        role: 'Artist',
+        names:
+          'Gabriela Bila, Robert Chang Chien, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia Yakonowsky, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger Prang, Ribs+Seixas, Alexandre Roy, Agata Staszczuk, Calvin SIN, Tote Tiere Maarten, Tim WEI, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
+      },
+      orgs: [
+        { role: 'Organizer', name: 'C-LAB', logo: '/C-LAB.png' },
+        { role: 'Supported by', name: 'MOC', logo: '/文化部.png' },
+        { role: 'Executive Organizer', name: 'C-LAB Future Vision Lab', logo: '/logo.svg' },
       ],
     },
     footer: {

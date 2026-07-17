@@ -1415,9 +1415,6 @@ function scrollToPageTop() {
           rel="noopener noreferrer"
         >
           <img class="brand__mark" src="/skyward.svg" width="120" height="120" :alt="txt.siteName" />
-          <span class="brand__text">
-            <span class="brand__eyebrow">{{ txt.siteTagline }}</span>
-          </span>
         </a>
 
         <div class="header__end">

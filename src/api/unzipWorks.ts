@@ -71,15 +71,11 @@ export function getWorksApiConfig(): WorksApiConfig {
   const key = String(import.meta.env.VITE_UNZIP_API_KEY ?? '').trim()
   const url = String(import.meta.env.VITE_UNZIP_WORKS_API_URL ?? DEFAULT_WORKS_URL).trim()
 
-  /** 本地有 key 時直連；正式站無 key 時改走 Netlify Function 代理 */
-  if (key) {
-    return { mode: 'direct', url, key }
-  }
+  /** 正式站優先走 Function 代理；若 build 時有 key，代理失敗可改直連 */
   if (import.meta.env.PROD) {
-    /** url 仍保留完整 works endpoint，供代理解析 path */
-    return { mode: 'proxy', url, key: '' }
+    return { mode: 'proxy', url, key }
   }
-  return { mode: 'direct', url, key: '' }
+  return { mode: 'direct', url, key }
 }
 
 function worksPathFromConfigUrl(apiUrl: string): string {
@@ -95,23 +91,49 @@ function worksPathFromConfigUrl(apiUrl: string): string {
   return DEFAULT_WORKS_PATH
 }
 
-function buildUnzipRequest(
+async function fetchUnzipJson<T>(
   path: string,
   query: Record<string, string | number> = {},
-): { url: string; headers: Record<string, string> } {
+  signal?: AbortSignal,
+): Promise<T> {
   const config = getWorksApiConfig()
-  if (config.mode === 'proxy') {
-    const params = new URLSearchParams()
-    params.set('path', path)
-    for (const [key, value] of Object.entries(query)) {
-      params.set(key, String(value))
-    }
-    return {
-      url: `${UNZIP_PROXY_PATH}?${params.toString()}`,
-      headers: { Accept: 'application/json' },
+  const attempts: WorksApiMode[] =
+    config.mode === 'proxy'
+      ? config.key
+        ? ['proxy', 'direct']
+        : ['proxy']
+      : ['direct']
+
+  let lastError: Error | null = null
+
+  for (const mode of attempts) {
+    const { url, headers } =
+      mode === 'proxy'
+        ? buildUnzipRequest(path, query)
+        : buildDirectRequest(path, query, config.key)
+
+    try {
+      const res = await fetch(url, { signal, headers })
+      if (!res.ok) {
+        throw new Error(`Unzip API failed (${mode}): ${res.status} ${res.statusText}`)
+      }
+      return (await res.json()) as T
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      if (import.meta.env.PROD) {
+        console.warn('[works] fetch failed', { mode, path, error: lastError.message })
+      }
     }
   }
 
+  throw lastError ?? new Error('Unzip API request failed')
+}
+
+function buildDirectRequest(
+  path: string,
+  query: Record<string, string | number>,
+  apiKey: string,
+): { url: string; headers: Record<string, string> } {
   const url = new URL(`https://unzip.clab.org.tw/api/v1${path}`)
   for (const [key, value] of Object.entries(query)) {
     url.searchParams.set(key, String(value))
@@ -119,30 +141,24 @@ function buildUnzipRequest(
   return {
     url: url.toString(),
     headers: {
-      Authorization: `Api-Key ${config.key}`,
+      Authorization: `Api-Key ${apiKey}`,
       Accept: 'application/json',
     },
   }
 }
 
-function buildPaginatedWorksUrl(apiUrl: string, offset: number, limit = WORKS_PAGE_SIZE): {
-  url: string
-  headers: Record<string, string>
-} {
-  const config = getWorksApiConfig()
-  if (config.mode === 'proxy') {
-    return buildUnzipRequest(worksPathFromConfigUrl(apiUrl), { limit, offset })
+function buildUnzipRequest(
+  path: string,
+  query: Record<string, string | number> = {},
+): { url: string; headers: Record<string, string> } {
+  const params = new URLSearchParams()
+  params.set('path', path)
+  for (const [key, value] of Object.entries(query)) {
+    params.set(key, String(value))
   }
-
-  const url = new URL(apiUrl)
-  url.searchParams.set('limit', String(limit))
-  url.searchParams.set('offset', String(offset))
   return {
-    url: url.toString(),
-    headers: {
-      Authorization: `Api-Key ${config.key}`,
-      Accept: 'application/json',
-    },
+    url: `${UNZIP_PROXY_PATH}?${params.toString()}`,
+    headers: { Accept: 'application/json' },
   }
 }
 
@@ -160,15 +176,14 @@ async function fetchWorkDetail(
   _apiKey: string,
   signal?: AbortSignal,
 ): Promise<Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'> | null> {
-  const { url, headers } = buildUnzipRequest(`/works/${workId}`)
-  const res = await fetch(url, { signal, headers })
-
-  if (!res.ok) return null
-
-  const json = (await res.json()) as {
-    data?: Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'>
+  try {
+    const json = await fetchUnzipJson<{
+      data?: Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'>
+    }>(`/works/${workId}`, {}, signal)
+    return json.data ?? null
+  } catch {
+    return null
   }
-  return json.data ?? null
 }
 
 /** 列表 API 可能沒有 note；缺介紹時改抓單筆詳情的 proposal / note */
@@ -213,14 +228,12 @@ export async function fetchProjectWorks(
   let total: number | null = null
 
   while (true) {
-    const { url, headers } = buildPaginatedWorksUrl(apiUrl || config.url, offset)
-    const res = await fetch(url, { signal, headers })
+    const json = await fetchUnzipJson<UnzipWorksResponse>(
+      worksPathFromConfigUrl(apiUrl || config.url),
+      { limit: WORKS_PAGE_SIZE, offset },
+      signal,
+    )
 
-    if (!res.ok) {
-      throw new Error(`Works API failed: ${res.status} ${res.statusText}`)
-    }
-
-    const json = (await res.json()) as UnzipWorksResponse
     if (!json.success || !Array.isArray(json.data)) {
       throw new Error('Works API returned an unexpected payload')
     }
@@ -382,15 +395,12 @@ export async function fetchArtistBio(
     artist.authorType === 'collective'
       ? `/collectives/${artist.id}`
       : `/contributors/${artist.id}`
-  const { url, headers } = buildUnzipRequest(path)
 
-  const res = await fetch(url, { signal, headers })
-
-  if (!res.ok) {
-    throw new Error(`Artist API failed: ${res.status} ${res.statusText}`)
-  }
-
-  const json = (await res.json()) as { data?: UnzipCollectiveDetail & UnzipContributorDetail }
+  const json = await fetchUnzipJson<{ data?: UnzipCollectiveDetail & UnzipContributorDetail }>(
+    path,
+    {},
+    signal,
+  )
   const data = json.data
   if (!data) return ''
 

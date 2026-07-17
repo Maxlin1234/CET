@@ -568,7 +568,7 @@ async function loadWorksFromApi() {
     await nextTick()
     measureWorksMarqueeSegment()
   } catch (error) {
-    if (import.meta.env.DEV) console.error('[works] API fetch failed', error)
+    console.error('[works] API fetch failed', error)
   }
 }
 

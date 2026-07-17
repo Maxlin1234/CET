@@ -4,9 +4,13 @@
   publish = "dist"
   functions = "netlify/functions"
 
-# Unzip API 金鑰請在 Netlify Environment variables 設定其一：
-#   UNZIP_API_KEY（建議）或 VITE_UNZIP_API_KEY
-# 正式站會走 /.netlify/functions/unzip 代理，不必把 key 編進前端。
+[functions]
+  node_bundler = "esbuild"
+
+# Unzip API 金鑰（擇一或兩者都設）：
+#   UNZIP_API_KEY        → 給 /.netlify/functions/unzip 代理用（建議，不會進前端 bundle）
+#   VITE_UNZIP_API_KEY   → 建置時寫入前端；代理失敗時可改直連 Unzip API
+# 設定後請 Trigger deploy → Clear cache and deploy site
 
 # 讓瀏覽器／CDN 優先取得最新 index.html（內含新版 JS/CSS 檔名）
 [[headers]]

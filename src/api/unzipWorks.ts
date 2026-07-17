@@ -53,15 +53,97 @@ type UnzipWorksResponse = {
   }
 }
 
-const DEFAULT_WORKS_URL = 'https://unzip.clab.org.tw/api/v1/projects/119/works'
+const DEFAULT_WORKS_PATH = '/projects/119/works'
+const DEFAULT_WORKS_URL = `https://unzip.clab.org.tw/api/v1${DEFAULT_WORKS_PATH}`
 const WORKS_PAGE_SIZE = 100
-const WORK_DETAIL_BASE = 'https://unzip.clab.org.tw/api/v1/works'
+const UNZIP_PROXY_PATH = '/.netlify/functions/unzip'
 
-function buildPaginatedWorksUrl(apiUrl: string, offset: number, limit = WORKS_PAGE_SIZE): string {
+export type WorksApiMode = 'direct' | 'proxy'
+
+export type WorksApiConfig = {
+  mode: WorksApiMode
+  /** direct 模式為完整 works URL；proxy 模式為 function 路徑 */
+  url: string
+  key: string
+}
+
+export function getWorksApiConfig(): WorksApiConfig {
+  const key = String(import.meta.env.VITE_UNZIP_API_KEY ?? '').trim()
+  const url = String(import.meta.env.VITE_UNZIP_WORKS_API_URL ?? DEFAULT_WORKS_URL).trim()
+
+  /** 本地有 key 時直連；正式站無 key 時改走 Netlify Function 代理 */
+  if (key) {
+    return { mode: 'direct', url, key }
+  }
+  if (import.meta.env.PROD) {
+    /** url 仍保留完整 works endpoint，供代理解析 path */
+    return { mode: 'proxy', url, key: '' }
+  }
+  return { mode: 'direct', url, key: '' }
+}
+
+function worksPathFromConfigUrl(apiUrl: string): string {
+  try {
+    if (apiUrl.startsWith('http')) {
+      const parsed = new URL(apiUrl)
+      const path = parsed.pathname.replace(/^\/api\/v1/, '')
+      return path.startsWith('/') ? path : `/${path}`
+    }
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_WORKS_PATH
+}
+
+function buildUnzipRequest(
+  path: string,
+  query: Record<string, string | number> = {},
+): { url: string; headers: Record<string, string> } {
+  const config = getWorksApiConfig()
+  if (config.mode === 'proxy') {
+    const params = new URLSearchParams()
+    params.set('path', path)
+    for (const [key, value] of Object.entries(query)) {
+      params.set(key, String(value))
+    }
+    return {
+      url: `${UNZIP_PROXY_PATH}?${params.toString()}`,
+      headers: { Accept: 'application/json' },
+    }
+  }
+
+  const url = new URL(`https://unzip.clab.org.tw/api/v1${path}`)
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, String(value))
+  }
+  return {
+    url: url.toString(),
+    headers: {
+      Authorization: `Api-Key ${config.key}`,
+      Accept: 'application/json',
+    },
+  }
+}
+
+function buildPaginatedWorksUrl(apiUrl: string, offset: number, limit = WORKS_PAGE_SIZE): {
+  url: string
+  headers: Record<string, string>
+} {
+  const config = getWorksApiConfig()
+  if (config.mode === 'proxy') {
+    return buildUnzipRequest(worksPathFromConfigUrl(apiUrl), { limit, offset })
+  }
+
   const url = new URL(apiUrl)
   url.searchParams.set('limit', String(limit))
   url.searchParams.set('offset', String(offset))
-  return url.toString()
+  return {
+    url: url.toString(),
+    headers: {
+      Authorization: `Api-Key ${config.key}`,
+      Accept: 'application/json',
+    },
+  }
 }
 
 function hasWorkDescription(work: UnzipWork): boolean {
@@ -75,16 +157,11 @@ function hasWorkDescription(work: UnzipWork): boolean {
 
 async function fetchWorkDetail(
   workId: number,
-  apiKey: string,
+  _apiKey: string,
   signal?: AbortSignal,
 ): Promise<Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'> | null> {
-  const res = await fetch(`${WORK_DETAIL_BASE}/${workId}`, {
-    signal,
-    headers: {
-      Authorization: `Api-Key ${apiKey}`,
-      Accept: 'application/json',
-    },
-  })
+  const { url, headers } = buildUnzipRequest(`/works/${workId}`)
+  const res = await fetch(url, { signal, headers })
 
   if (!res.ok) return null
 
@@ -126,18 +203,18 @@ export async function fetchProjectWorks(
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<UnzipWork[]> {
+  const config = getWorksApiConfig()
+  if (config.mode === 'direct' && !apiKey.trim()) {
+    throw new Error('Works API key is missing')
+  }
+
   const allWorks: UnzipWork[] = []
   let offset = 0
   let total: number | null = null
 
   while (true) {
-    const res = await fetch(buildPaginatedWorksUrl(apiUrl, offset), {
-      signal,
-      headers: {
-        Authorization: `Api-Key ${apiKey}`,
-        Accept: 'application/json',
-      },
-    })
+    const { url, headers } = buildPaginatedWorksUrl(apiUrl || config.url, offset)
+    const res = await fetch(url, { signal, headers })
 
     if (!res.ok) {
       throw new Error(`Works API failed: ${res.status} ${res.statusText}`)
@@ -298,22 +375,16 @@ export function artistBioCacheKey(artist: Pick<WorkArtist, 'id' | 'authorType'>)
 export async function fetchArtistBio(
   artist: Pick<WorkArtist, 'id' | 'authorType'>,
   lang: Lang,
-  apiKey: string,
+  _apiKey: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const base = 'https://unzip.clab.org.tw/api/v1'
   const path =
     artist.authorType === 'collective'
-      ? `${base}/collectives/${artist.id}`
-      : `${base}/contributors/${artist.id}`
+      ? `/collectives/${artist.id}`
+      : `/contributors/${artist.id}`
+  const { url, headers } = buildUnzipRequest(path)
 
-  const res = await fetch(path, {
-    signal,
-    headers: {
-      Authorization: `Api-Key ${apiKey}`,
-      Accept: 'application/json',
-    },
-  })
+  const res = await fetch(url, { signal, headers })
 
   if (!res.ok) {
     throw new Error(`Artist API failed: ${res.status} ${res.statusText}`)
@@ -356,12 +427,5 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
     body,
     ...(artists.length > 0 ? { artists } : {}),
     ...(artistBioFallback ? { artistBioFallback } : {}),
-  }
-}
-
-export function getWorksApiConfig(): { url: string; key: string } {
-  return {
-    url: String(import.meta.env.VITE_UNZIP_WORKS_API_URL ?? DEFAULT_WORKS_URL).trim(),
-    key: String(import.meta.env.VITE_UNZIP_API_KEY ?? '').trim(),
   }
 }

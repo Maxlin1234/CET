@@ -559,8 +559,8 @@ function workCardMarqueeText(card: { body: string }): string {
 }
 
 async function loadWorksFromApi() {
-  const { url, key } = getWorksApiConfig()
-  if (!key) return
+  const { mode, url, key } = getWorksApiConfig()
+  if (mode === 'direct' && !key) return
 
   try {
     const items = await fetchProjectWorks(url, key)
@@ -826,8 +826,8 @@ async function loadWorksDetailArtistBios() {
   worksDetailArtistBioAbort = controller
   worksDetailArtistBiosLoading.value = true
 
-  const { key: apiKey } = getWorksApiConfig()
-  if (!apiKey.trim()) {
+  const { mode, key: apiKey } = getWorksApiConfig()
+  if (mode === 'direct' && !apiKey.trim()) {
     worksDetailArtistBiosLoading.value = false
     worksDetailArtistBioAbort = null
     return

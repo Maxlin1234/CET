@@ -416,10 +416,13 @@ watch([viewYear, viewMonth], () => {
 
 <style scoped>
 .schedule-calendar {
-  display: grid;
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: clamp(1.25rem, 3vw, 2rem);
-  align-items: start;
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .schedule-calendar__panel {
@@ -429,6 +432,10 @@ watch([viewYear, viewMonth], () => {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 8px 28px rgb(var(--blue-rgb) / 0.12);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .schedule-calendar__panel--cal {
@@ -1024,9 +1031,18 @@ watch([viewYear, viewMonth], () => {
   transition: color 0.15s ease;
 }
 
-@media (max-width: 860px) {
+@media (min-width: 861px) {
   .schedule-calendar {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+@media (max-width: 860px) {
+  .schedule-calendar__panel--cal,
+  .schedule-calendar__panel--list {
+    width: 100%;
   }
 
   .schedule-card {

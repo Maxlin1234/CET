@@ -3948,6 +3948,9 @@ a:hover {
 
 .section__inner--schedule {
   max-width: 960px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .section--schedule-grad .section__title {

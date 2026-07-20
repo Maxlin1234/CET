@@ -2065,7 +2065,6 @@ function scrollToPageTop() {
               <div class="works-detail__main">
                 <div
                   class="works-detail__media"
-                  :class="{ 'works-detail__media--with-artists': worksDetailArtists.length > 0 }"
                 >
                   <div class="works-detail__gallery">
                     <div
@@ -4721,20 +4720,25 @@ a:hover {
 }
 
 .works-detail__main {
-  display: grid;
-  grid-template-columns: minmax(0, 1.14fr) minmax(0, 0.86fr);
-  gap: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   align-items: stretch;
-  padding: 1.35rem 1.25rem 1.5rem;
+  padding: 0 1rem 1.15rem;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   overflow: hidden;
 }
 
 .works-detail__media {
+  flex: 0 0 auto;
+  order: 1;
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  width: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -4745,14 +4749,14 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   min-width: 0;
+  width: 100%;
 }
 
 /**
- * 有藝術家照片時：作品圖與藝術家圖上下堆疊、各約半寬正方形；
- * 多位藝術家時左側媒體區可上下捲動，避免重疊。
+ * 舊版「作品頁內嵌藝術家圖」樣式保留兼容；現已改為獨立藝術家頁。
  */
 .works-detail__media--with-artists {
   gap: 0.75rem;
@@ -4760,7 +4764,6 @@ a:hover {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .works-detail__media--with-artists .works-detail__gallery {
@@ -4788,15 +4791,17 @@ a:hover {
   align-items: center;
   justify-content: center;
   gap: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 0;
-  container-type: size;
+  container-type: normal;
 }
 
 .works-detail__viewport {
   position: relative;
   flex: 0 0 auto;
-  width: min(100%, 100cqw, 100cqh);
+  width: 100%;
+  max-width: 100%;
   aspect-ratio: 1 / 1;
   height: auto;
   align-self: center;
@@ -5027,23 +5032,29 @@ a:hover {
 }
 
 .works-detail__artist-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   align-items: stretch;
-  padding: 1.35rem 1.25rem 1.5rem;
+  padding: 0 1rem 1.15rem;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   overflow: hidden;
 }
 
 .works-detail__artist-media {
+  flex: 0 0 auto;
+  order: 1;
   min-width: 0;
   min-height: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   align-content: start;
+  max-height: min(42vh, 18rem);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -5054,12 +5065,15 @@ a:hover {
 }
 
 .works-detail__artist-prose {
+  flex: 1 1 auto;
+  order: 2;
   min-width: 0;
   min-height: 0;
+  width: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-right: 0.15rem;
+  padding-right: 0;
   font-family: var(--font-body);
   font-size: 0.95rem;
   line-height: 1.75;
@@ -5089,19 +5103,21 @@ a:hover {
 }
 
 .works-detail__prose {
+  flex: 1 1 auto;
+  order: 2;
   min-width: 0;
   min-height: 0;
+  width: 100%;
   align-self: stretch;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-right: 0.35rem;
+  padding-right: 0;
   font-family: var(--font-body);
   font-size: 0.95rem;
   line-height: 1.75;
   color: var(--on-accent);
-  scrollbar-gutter: stable;
 }
 
 .works-detail__intro {
@@ -5141,6 +5157,57 @@ a:hover {
   margin-bottom: 0;
 }
 
+/** 桌機／平板橫向：左圖右文 */
+@media (min-width: 841px) {
+  .works-detail__main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.14fr) minmax(0, 0.86fr);
+    gap: 1.75rem 2rem;
+    padding: 1.35rem 1.25rem 1.5rem;
+  }
+
+  .works-detail__media {
+    order: unset;
+    height: 100%;
+  }
+
+  .works-detail__gallery {
+    flex: 1 1 auto;
+  }
+
+  .works-detail__carousel {
+    flex: 1 1 auto;
+    container-type: size;
+  }
+
+  .works-detail__viewport {
+    width: min(100%, 100cqw, 100cqh);
+  }
+
+  .works-detail__prose {
+    order: unset;
+    padding-right: 0.35rem;
+    scrollbar-gutter: stable;
+  }
+
+  .works-detail__artist-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.75rem 2rem;
+    padding: 1.35rem 1.25rem 1.5rem;
+  }
+
+  .works-detail__artist-media {
+    order: unset;
+    max-height: none;
+  }
+
+  .works-detail__artist-prose {
+    order: unset;
+    padding-right: 0.15rem;
+  }
+}
+
 @media (max-width: 840px) {
   .works-detail-scrim {
     align-items: center;
@@ -5166,71 +5233,6 @@ a:hover {
   .works-detail__tab {
     font-size: 0.98rem;
     letter-spacing: 0.08em;
-  }
-
-  /** 手機：圖在上、文在下 */
-  .works-detail__main {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 0 1rem 1.15rem;
-    overflow: hidden;
-  }
-
-  .works-detail__artist-main {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 0 1rem 1.15rem;
-    overflow: hidden;
-  }
-
-  .works-detail__artist-media {
-    flex: 0 0 auto;
-    order: 1;
-    max-height: min(42vh, 18rem);
-  }
-
-  .works-detail__artist-prose {
-    flex: 1 1 auto;
-    order: 2;
-    min-height: 0;
-    padding-right: 0;
-  }
-
-  .works-detail__media {
-    flex: 0 0 auto;
-    order: 1;
-    width: 100%;
-    height: auto;
-  }
-
-  .works-detail__media--with-artists {
-    width: 100%;
-    height: auto;
-    max-height: min(58vh, 28rem);
-  }
-
-  .works-detail__prose {
-    flex: 1 1 auto;
-    order: 2;
-    min-height: 0;
-    padding-right: 0;
-  }
-
-  .works-detail__carousel {
-    flex: 0 0 auto;
-    width: 100%;
-    container-type: normal;
-    gap: 0;
-  }
-
-  .works-detail__viewport {
-    width: 100%;
-    max-width: 100%;
-    aspect-ratio: 1 / 1;
-    height: auto;
-    margin: 0;
   }
 
   .works-detail__artists {

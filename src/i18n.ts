@@ -1,10 +1,19 @@
 export type Lang = 'zh' | 'en'
 
+export type AdmissionInlineLink = {
+  label: string
+  url: string
+}
+
 export type AdmissionTicketItem = {
   kind: 'item' | 'heading' | 'note' | 'lead'
   text: string
   url?: string
+  inlineLinks?: readonly AdmissionInlineLink[]
 }
+
+const ACCUPASS_ORGANIZER_URL =
+  'https://www.accupass.com/organizer/detail/1807130939251014675956'
 
 /** 8/1、8/2、8/21、8/28 共用同一組節目 */
 const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-28'] as const
@@ -30,39 +39,37 @@ const enUnitFourIntro =
 const zhAugSharedPrograms = [
   { name: '萬象之初', creator: '浮點設計', duration: '3 mins', region: '臺灣' },
   { name: '角鯨之殤', creator: '張簡長倫', duration: '10 mins', region: '臺灣' },
-  { name: '入岫：穹頂', creator: '李宸安、鄭乃銓', duration: '9 mins', region: '臺灣' },
+  { name: '入岫：穹頂', creator: '李宸安X鄭乃銓', duration: '9 mins', region: '臺灣' },
   {
     name: '油井之殤：鯨落4993尺',
-    creator: '陳蘇楊、洗筱然、盧德昕',
+    creator: '陳蘇楊X冼筱然X盧德昕',
     duration: '13 mins',
     region: '臺灣',
   },
   {
-    name: 'SAT Fest 2026作品精選',
-    creator: '加拿大 SAT科技藝術中心 / Hubblo',
+    name: 'SAT Fest 2026 獲獎作品',
     duration: '25 mins',
     region: '加拿大等',
   },
 ] as const
 
 const enAugSharedPrograms = [
-  { name: 'Genesis of All Things', creator: 'Floating Point Design', duration: '3 mins', region: 'Taiwan' },
-  { name: 'The Loss of Right Whale', creator: 'Chang Chien-Lun', duration: '10 mins', region: 'Taiwan' },
+  { name: 'Genesis', creator: 'FPA (Floating Point Art)', duration: '3 mins', region: 'Taiwan' },
+  { name: 'Narstalgia', creator: 'Robert Chang Chien', duration: '10 mins', region: 'Taiwan' },
   {
-    name: 'Into the Mountain: Dome',
-    creator: 'Lee Chen-An, Cheng Nai-Chuan',
+    name: 'Enter the Cave: Dome',
+    creator: 'LEE Chen-An X Daniel CHENG',
     duration: '9 mins',
     region: 'Taiwan',
   },
   {
-    name: 'Death of Oil Well: Whale Fall 4993 ft',
-    creator: 'Chen Su-Yang, Xi Xiao-Ran, Lu De-Xin',
+    name: '4993 Feet Under',
+    creator: 'Ina CHEN, Calvin SIN, LU Te-Hsing',
     duration: '13 mins',
     region: 'Taiwan',
   },
   {
-    name: 'SAT Fest 2026 Highlights',
-    creator: 'SAT Montréal / Hubblo',
+    name: 'SAT Fest 2026',
     duration: '25 mins',
     region: 'Canada, etc.',
   },
@@ -79,20 +86,25 @@ const AUG_SET_B_DATES = [
 
 const zhAugSetBPrograms = [
   { name: '幻幕', creator: '葉澈', duration: '3 mins', region: '臺灣' },
-  { name: '誤差追獵', creator: '魏廷宇', duration: '12 mins', region: '臺灣' },
+  { name: '誤差追獵', creator: '魏廷宇', duration: '8 mins', region: '臺灣' },
   { name: '光所到之處', creator: '謝鎮璘', duration: '5 mins', region: '臺灣' },
   { name: '意識之維', creator: 'MONOCOLOR', duration: '15 mins', region: '奧地利' },
-  { name: '時間層理', creator: '吳秉聖、劉承杰', duration: '22 mins', region: '臺灣' },
+  { name: '時間層理', creator: '吳秉聖X劉承杰', duration: '22 mins', region: '臺灣' },
 ] as const
 
 const enAugSetBPrograms = [
-  { name: 'Phantom Veil', creator: 'Ye Che', duration: '3 mins', region: 'Taiwan' },
-  { name: 'Deviation Hunt', creator: 'Wei Ting-Yu', duration: '12 mins', region: 'Taiwan' },
-  { name: 'Where Light Reaches', creator: 'Hsieh Chen-Lin', duration: '5 mins', region: 'Taiwan' },
-  { name: 'Dimension of Consciousness', creator: 'MONOCOLOR', duration: '15 mins', region: 'Austria' },
+  { name: 'What A Screen!', creator: 'YEH Che', duration: '3 mins', region: 'Taiwan' },
+  { name: 'Stalking for Errors', creator: 'Tim WEI', duration: '8 mins', region: 'Taiwan' },
   {
-    name: 'Stratigraphy of Time',
-    creator: 'Wu Ping-Sheng, Liu Cheng-Jie',
+    name: 'Where Light Arrives',
+    creator: 'Damonxart (Damon HSIEH)',
+    duration: '5 mins',
+    region: 'Taiwan',
+  },
+  { name: 'NOOSPHERE', creator: 'MONOCOLOR', duration: '15 mins', region: 'Austria' },
+  {
+    name: 'Temporal Strata',
+    creator: 'WU Ping-Sheng X Jie LIOU',
     duration: '22 mins',
     region: 'Taiwan',
   },
@@ -107,46 +119,46 @@ const AUG_SET_C_DATES = [
 ] as const
 
 const zhAugSetCPrograms = [
-  { name: '第二自然', creator: '吳克軍 x 林柏勳', duration: '3 mins', region: '臺灣' },
+  { name: '第二自然', creator: '吳克軍 X 林柏勳', duration: '3 mins', region: '臺灣' },
   {
     name: '循鹿',
-    creator: '桑德琳．德米耶、拉爾夫．基爾赫茲',
+    creator: '桑德琳．德米耶 X 拉爾夫．基爾赫茲',
     duration: '12 mins',
     region: '法國、西班牙',
   },
-  { name: '影像雜技', creator: '莊禾 x 蕭禹琦', duration: '10 mins', region: '臺灣' },
+  { name: '影像雜技', creator: '莊禾 X 蕭禹琦', duration: '10 mins', region: '臺灣' },
   {
     name: '新摩登時代',
-    creator: '初未來 x 超維度 x 江戶未來世 x Kivi x 賴皮 x 林強',
+    creator: '初未來 X 超維度 X 江戶未來世 X Kivi X 賴皮 X 林強',
     duration: '20 mins',
     region: '臺灣',
   },
   {
     name: '虛迷山',
-    creator: '姚瑞中、郭一、Meuko! Meuko!',
+    creator: '姚瑞中 X 郭一 X Meuko! Meuko!',
     duration: '12 mins',
     region: '臺灣',
   },
 ] as const
 
 const enAugSetCPrograms = [
-  { name: 'Second Nature', creator: 'Wu Ke-Jun x Lin Po-Hsun', duration: '3 mins', region: 'Taiwan' },
+  { name: 'Second Nature', creator: 'WU Ke-Jyun X LIN Bo-Xun', duration: '3 mins', region: 'Taiwan' },
   {
-    name: 'Following the Deer',
-    creator: 'Sandrine Deumier, Ralph Killhertz',
+    name: 'Following the deer',
+    creator: 'Sandrine DEUMIER X Ralph KILLHERTZ',
     duration: '12 mins',
     region: 'France, Spain',
   },
-  { name: 'Visual Acrobatics', creator: 'Chuang He x Hsiao Yu-Chi', duration: '10 mins', region: 'Taiwan' },
+  { name: 'Demo: Dome', creator: 'CHUANG Ho X YuChi HSIAO', duration: '10 mins', region: 'Taiwan' },
   {
-    name: 'New Modern Times',
-    creator: 'Chu Future x Hyper Dimension x Edo Miraiyo x Kivi x Lai Pi x Lim Giong',
+    name: 'NEW MODERN TIMES',
+    creator: 'Hello World x Dimension Plus x Hello Edo! x Kivi x Mr. Skin x LIM Giong',
     duration: '20 mins',
     region: 'Taiwan',
   },
   {
     name: 'Mount Ecstasy',
-    creator: 'Yao Jui-Chung, Kuo Yi, Meuko! Meuko!',
+    creator: 'YAO Jui-Chung X Yi KUO X Meuko Meuko',
     duration: '12 mins',
     region: 'Taiwan',
   },
@@ -187,6 +199,52 @@ const zhAugSetDPrograms = [
 const enAugSetDPrograms = [
   { name: 'Live A/VJ', creator: 'Wei Ting-Yu, TBD', duration: '50 mins', region: 'Taiwan' },
 ] as const
+
+/** 節目表（中／英）→ 作品 API 標題關鍵字；供場次點擊開啟作品詳情 */
+export type ScheduleProgramMatch = {
+  zh: string
+  en: string
+  workKeys: readonly string[]
+}
+
+function zipScheduleProgramMatches(
+  zh: readonly { name: string }[],
+  en: readonly { name: string }[],
+  workKeys: readonly (readonly string[])[],
+): ScheduleProgramMatch[] {
+  return zh.map((program, index) => ({
+    zh: program.name,
+    en: en[index]?.name ?? program.name,
+    workKeys: workKeys[index] ?? [program.name, en[index]?.name ?? program.name],
+  }))
+}
+
+export const SCHEDULE_PROGRAM_MATCHES: readonly ScheduleProgramMatch[] = [
+  ...zipScheduleProgramMatches(zhAugSharedPrograms, enAugSharedPrograms, [
+    ['萬象之初', 'Genesis'],
+    ['角鯨之殤', 'Narstalgia'],
+    ['入岫', 'Enter the Cave'],
+    ['油井之殤', '4993 Feet'],
+    ['SAT Fest 2026', '獲獎作品'],
+  ]),
+  ...zipScheduleProgramMatches(zhAugSetBPrograms, enAugSetBPrograms, [
+    ['幻幕', 'What A Screen', 'Ｗhat A Screen'],
+    ['誤差追獵', 'Stalking for Errors'],
+    ['光所到之處', 'Where Light Arrives'],
+    ['意識之維', 'NOOSPHERE'],
+    ['時間層理', 'Temporal Strata'],
+  ]),
+  ...zipScheduleProgramMatches(zhAugSetCPrograms, enAugSetCPrograms, [
+    ['第二自然', 'Second Nature'],
+    ['循鹿', 'Following the deer'],
+    ['影像雜技', 'Demo: Dome'],
+    ['新摩登時代', 'NEW MODERN TIMES'],
+    ['虛迷山', 'Mount Ecstasy'],
+  ]),
+  ...zipScheduleProgramMatches(zhAugSetDPrograms, enAugSetDPrograms, [
+    ['音像節目', 'FVL2026', 'A/VJ'],
+  ]),
+]
 
 export const messages = {
   zh: {
@@ -231,13 +289,18 @@ export const messages = {
           url: 'https://fvl.clab.org.tw/festival/2026',
         },
         { kind: 'item', text: '採現場排隊依序入場，場內人數額滿為止。' },
-        { kind: 'note', text: '＊註：8/23(日) 為現場表演，入場方式請見【售票節目】說明。' },
+        { kind: 'note', text: '＊註：8/23(日) 為現場表演，入場方式請見【索票節目】說明。' },
         { kind: 'item', text: '場內人數上限為100人，若額滿請等候場內觀眾離場後，依現場人數管制進場。' },
         { kind: 'item', text: '開放入場時若排隊人員不在現場即視同放棄，需重新排隊依序等候入場。' },
         { kind: 'heading', text: '【索票節目】' },
         { kind: 'lead', text: '索票節目共1檔：8/23(日) 16:00｜《音像表演》' },
         { kind: 'item', text: '一人一票憑票入場。' },
         { kind: 'item', text: '開演前10分鐘開放入場，並不開放遲到觀眾入場。' },
+        {
+          kind: 'item',
+          text: '本節目預計在8/10(一)12:00於ACCUPASS開放索票。',
+          inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
+        },
       ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
@@ -249,10 +312,6 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
 為呼應晴空季策展概念，在曾經承載飛行的場域中，穹頂成為新的感知介面，帶領觀眾穿梭於現實與未來之間的觀看視角，重新思考人類與科技、生態、時間與空間之間的關係，呈現當代科技藝術對未來感知的多重實驗與想像。
 
 8月期間，將呈現歷年精彩穹頂影像作品，以及邀請加拿大 SAT 科技藝術中心「SAT Fest 2026」獲獎作品來臺進行首場國際展映；另規劃現場LIVE演出，開啟跨越感知維度的穹頂體驗。`,
-      officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
-      moreLabel: '瞭解更多',
-      officialAboutAria:
-        '開啟 FUTURE VISION LAB 2026 官方網站（另開新分頁）',
     },
     /** 「關於我們」上方：滑鼠／觸控位置會改變漸層高光範圍 */
     aboutGlow: {
@@ -416,7 +475,7 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
       artists: {
         role: '參與藝術家',
         names:
-          '江戶未來世、加布里埃拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿加塔．史塔什丘克、冼筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．提爾．馬騰、Kivi, MONOCOLOR, Meuko! Meuko!, Fantastik Obsolete, Ribs＋塞夏斯',
+          '江戶未來世、加布里埃拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿加塔．史塔什丘克、洗筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．提爾．馬騰、Kivi, MONOCOLOR, Meuko! Meuko!, Fantastik Obsolete, Ribs + 塞夏斯',
       },
       orgs: [
         { role: '主辦單位', name: 'C-LAB', logo: '/C-LAB.png' },
@@ -482,6 +541,7 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         {
           kind: 'item',
           text: 'For detailed program registration information, please visit the "C-LAB Future Vision Lab" Facebook page or the event page of C-LAB on ACCUPASS.',
+          inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
         },
         {
           kind: 'item',
@@ -508,6 +568,11 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
           kind: 'item',
           text: 'Please arrive at least 10 minutes before the performance or screening. Latecomers will not be admitted.',
         },
+        {
+          kind: 'item',
+          text: 'Tickets for this event will open on ACCUPASS on Monday, August 10 at 12:00.',
+          inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
+        },
       ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
@@ -515,10 +580,6 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
       body: `Since 2020, the C-LAB Future Vision Lab has developed the “FUTURE VISION LAB” experiment program with Taiwan’s only mobile outdoor dome- “FVL DOME”. Originating from experimental digital architecture, this program explores the boundaries of perception shaped by technology and highlights the interdisciplinary creativity of Taiwan’s tech-art scene.
 
 Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new perceptual interface at the former aviation site, inviting audiences to rethink the relationships between humanity, technology, ecology, time, and space. In August, FVL will screen the selected fulldome films from previous editions, alongside the Taiwan premiere of award-winning pieces from “SAT Fest 2026” by the SAT – Society for Arts and Technology, as well as the live audiovisual performance.`,
-      officialAboutUrl: 'https://fvl.clab.org.tw/festival/2026',
-      moreLabel: 'Learn more',
-      officialAboutAria:
-        'Open FUTURE VISION LAB 2026 official website (new tab)',
     },
     aboutGlow: {
       ariaLabel:
@@ -679,7 +740,7 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
         ],
       ],
       artists: {
-        role: 'Artist',
+        role: 'Participating Artists',
         names:
           'Gabriela Bila, Robert Chang Chien, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia Yakonowsky, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger Prang, Ribs+Seixas, Alexandre Roy, Agata Staszczuk, Calvin SIN, Tote Tiere Maarten, Tim WEI, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
       },

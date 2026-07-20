@@ -10,8 +10,8 @@ import {
 } from '@/api/unzipWorks'
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import ScheduleCalendar from '@/components/ScheduleCalendar.vue'
-import type { AdmissionTicketItem, Lang } from './i18n'
-import { UNIT_ACCENT_PROGRAM_GROUPS, messages } from './i18n'
+import type { AdmissionInlineLink, AdmissionTicketItem, Lang, ScheduleProgramMatch } from './i18n'
+import { SCHEDULE_PROGRAM_MATCHES, UNIT_ACCENT_PROGRAM_GROUPS, messages } from './i18n'
 import type { ScheduleAccent } from '@/types/schedule'
 import type { WorkArtistBioSource, WorkCard } from '@/types/workCard'
 import { Gradient } from '@/Gradient.js'
@@ -147,7 +147,7 @@ function onHeroMotionMqlChange() {
   } else {
     initHeroGridRevealCanvas()
     initVantaEffect()
-    initMouseTrailCanvasEffect()
+    syncMouseTrailCanvasEffect()
     void nextTick(() => setupHeroScrollParallax())
   }
 }
@@ -262,7 +262,7 @@ watch(heroMotionOk, (ok) => {
   } else {
     initHeroGridRevealCanvas()
     initVantaEffect()
-    initMouseTrailCanvasEffect()
+    syncMouseTrailCanvasEffect()
     startAboutGlowIdleLoop()
     if (worksDetailIndex.value != null) startWorksDetailAutoplay()
     void nextTick(() => setupHeroScrollParallax())
@@ -347,11 +347,26 @@ function teardownVantaEffect() {
 }
 
 let teardownMouseTrail: (() => void) | null = null
+let mouseTrailCapabilityMql: MediaQueryList | null = null
+
+/** 手機／觸控裝置不啟用游標拖曳方塊 */
+function canUseMouseTrail() {
+  if (typeof window === 'undefined') return false
+  return !window.matchMedia('(hover: none), (pointer: coarse)').matches
+}
+
+function syncMouseTrailCanvasEffect() {
+  if (heroMotionOk.value && canUseMouseTrail()) {
+    initMouseTrailCanvasEffect()
+  } else {
+    teardownMouseTrailCanvas()
+  }
+}
 
 function initMouseTrailCanvasEffect() {
   teardownMouseTrail?.()
   teardownMouseTrail = null
-  if (!heroMotionOk.value) return
+  if (!heroMotionOk.value || !canUseMouseTrail()) return
   const canvas = document.getElementById('mouse-trail-canvas')
   if (!(canvas instanceof HTMLCanvasElement)) return
   const invertCanvas = document.getElementById('mouse-trail-invert-canvas')
@@ -494,6 +509,8 @@ onMounted(async () => {
   syncHeroMotionPref()
   motionMql = window.matchMedia('(prefers-reduced-motion: reduce)')
   motionMql.addEventListener('change', onHeroMotionMqlChange)
+  mouseTrailCapabilityMql = window.matchMedia('(hover: none), (pointer: coarse)')
+  mouseTrailCapabilityMql.addEventListener('change', syncMouseTrailCanvasEffect)
 
   /** WebGL 動態底：首屏 */
   await nextTick()
@@ -515,7 +532,7 @@ onMounted(async () => {
   initHeroGridRevealCanvas()
   await nextTick()
   initVantaEffect()
-  initMouseTrailCanvasEffect()
+  syncMouseTrailCanvasEffect()
   if (heroMotionOk.value) startAboutGlowIdleLoop()
   setupHeroScrollParallax()
 })
@@ -527,6 +544,7 @@ onUnmounted(() => {
   teardownMouseTrailCanvas()
   teardownHeroFontWeightEffect()
   motionMql?.removeEventListener('change', onHeroMotionMqlChange)
+  mouseTrailCapabilityMql?.removeEventListener('change', syncMouseTrailCanvasEffect)
   resetHeroStripePointerSpeed()
   heroStripeGradient?.disconnect()
   heroStripeGradient = null
@@ -542,10 +560,45 @@ onUnmounted(() => {
 const txt = computed(() => messages[lang.value])
 
 type AdmissionTicketRow =
-  | { kind: 'item'; text: string; url?: string; num: number }
+  | { kind: 'item'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[]; num: number }
   | { kind: 'heading'; text: string }
   | { kind: 'note'; text: string }
   | { kind: 'lead'; text: string }
+
+type AdmissionTextSegment =
+  | { type: 'text'; value: string }
+  | { type: 'link'; label: string; url: string }
+
+function admissionTicketTextSegments(row: {
+  text: string
+  url?: string
+  inlineLinks?: readonly AdmissionInlineLink[]
+}): AdmissionTextSegment[] {
+  const segments: AdmissionTextSegment[] = []
+  const links = row.inlineLinks ?? []
+  if (!links.length) {
+    segments.push({ type: 'text', value: row.text })
+    if (row.url) segments.push({ type: 'link', label: row.url, url: row.url })
+    return segments
+  }
+
+  let remainder = row.text
+  const orderedLinks = [...links].sort(
+    (a, b) => row.text.indexOf(a.label) - row.text.indexOf(b.label),
+  )
+
+  for (const link of orderedLinks) {
+    const index = remainder.indexOf(link.label)
+    if (index < 0) continue
+    if (index > 0) segments.push({ type: 'text', value: remainder.slice(0, index) })
+    segments.push({ type: 'link', label: link.label, url: link.url })
+    remainder = remainder.slice(index + link.label.length)
+  }
+
+  if (remainder) segments.push({ type: 'text', value: remainder })
+  if (row.url) segments.push({ type: 'link', label: row.url, url: row.url })
+  return segments
+}
 
 function buildTicketDisplayRows(
   items: readonly AdmissionTicketItem[],
@@ -563,7 +616,7 @@ function buildTicketDisplayRows(
       continue
     }
     num += 1
-    rows.push({ kind: 'item', text: item.text, url: item.url, num })
+    rows.push({ kind: 'item', text: item.text, url: item.url, inlineLinks: item.inlineLinks, num })
   }
   return rows
 }
@@ -766,24 +819,44 @@ function workCardUnitClass(card: WorkCard, index: number): string | undefined {
 }
 
 const openableWorkTitles = computed(() => {
-  const titles = new Set<string>()
-
-  if (apiWorks.value?.length) {
-    for (const work of apiWorks.value) {
-      for (const candidate of [work.title_zh_tw, work.title]) {
-        const text = candidate?.trim()
-        if (text) titles.add(text)
-      }
+  const names: string[] = []
+  for (const entry of SCHEDULE_PROGRAM_MATCHES) {
+    if (findWorkCardIndexByMatchKeys(entry.workKeys) >= 0) {
+      names.push(entry.zh, entry.en)
     }
   }
-
-  for (const card of worksCards.value) {
-    if (card.title?.trim()) titles.add(card.title.trim())
-    if (card.subtitle?.trim()) titles.add(card.subtitle.trim())
-  }
-
-  return [...titles]
+  return names
 })
+
+function resolveScheduleProgramMatch(name: string): ScheduleProgramMatch | null {
+  const needle = normalizeWorkTitle(name)
+  if (!needle) return null
+  return (
+    SCHEDULE_PROGRAM_MATCHES.find((entry) => {
+      const labels = [entry.zh, entry.en]
+      return labels.some((label) => {
+        const hay = normalizeWorkTitle(label)
+        return hay === needle || hay.includes(needle) || needle.includes(hay)
+      })
+    }) ?? null
+  )
+}
+
+function findWorkCardIndexByMatchKeys(workKeys: readonly string[]): number {
+  for (const key of workKeys) {
+    const needle = normalizeWorkTitle(key)
+    if (!needle) continue
+    const ix = worksCards.value.findIndex((card, index) => {
+      const work = apiWorks.value?.[index] ?? null
+      return workTitleCandidates(card, work).some((title) => {
+        const hay = normalizeWorkTitle(title)
+        return hay === needle || hay.includes(needle) || needle.includes(hay)
+      })
+    })
+    if (ix >= 0) return ix
+  }
+  return -1
+}
 
 function workTitleCandidates(card: WorkCard, work?: UnzipWork | null): string[] {
   const titles = new Set<string>()
@@ -801,6 +874,12 @@ function workTitleCandidates(card: WorkCard, work?: UnzipWork | null): string[] 
 }
 
 function findWorkCardIndexByProgramName(name: string): number {
+  const entry = resolveScheduleProgramMatch(name)
+  if (entry) {
+    const ix = findWorkCardIndexByMatchKeys(entry.workKeys)
+    if (ix >= 0) return ix
+  }
+
   const needle = normalizeWorkTitle(name)
   if (!needle) return -1
   return worksCards.value.findIndex((card, index) => {
@@ -832,6 +911,8 @@ function abortWorksDetailArtistBioFetch() {
 async function loadWorksDetailArtistBios() {
   const artists = worksDetailArtists.value
   if (!artists.length) return
+
+  const workId = worksDetailCard.value?.id
 
   const sources: WorkArtistBioSource[] = artists.map(({ id, authorType, name }) => ({
     id,
@@ -869,7 +950,13 @@ async function loadWorksDetailArtistBios() {
       pending.map(async (artist) => {
         const cacheKey = worksDetailArtistBioKey(artist)
         try {
-          const bio = await fetchArtistBio(artist, lang.value, apiKey, controller.signal)
+          const bio = await fetchArtistBio(
+            artist,
+            lang.value,
+            apiKey,
+            controller.signal,
+            workId,
+          )
           return [cacheKey, bio] as const
         } catch (err) {
           if (controller.signal.aborted) return null
@@ -1408,12 +1495,7 @@ function scrollToPageTop() {
   <div class="page">
     <header class="header">
       <div class="header__inner">
-        <a
-          href="https://fvl.clab.org.tw/"
-          class="brand"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href="/" class="brand">
           <img class="brand__mark" src="/skyward.svg" width="120" height="120" :alt="txt.siteName" />
         </a>
 
@@ -1585,28 +1667,22 @@ function scrollToPageTop() {
       <section id="about" class="section section--about">
         <div class="section__inner section__inner--about">
           <div class="about-block__head">
-              <div class="about_title">
-              <h1>About us</h1>
+            <div class="about-block__titles">
+              <div class="about-block__title-stack">
+                <div class="about_title">
+                  <h1>About us</h1>
+                </div>
+                <h1 class="section__title about-block__title">{{ txt.about.title }}</h1>
               </div>
-           <h1 class="section__title about-block__title">{{ txt.about.title }}</h1>
-            <a
-              class="about-block__more"
-              :href="txt.about.officialAboutUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              :aria-label="txt.about.officialAboutAria"
-            >
-              {{ txt.about.moreLabel }}
-            </a>
-            <div class="hero_logo">
-              <img
-                class="hero_logo__img"
-                src="/logo.svg"
-                alt="FUTURE VISION LAB"
-                decoding="async"
-              />
+              <div class="hero_logo">
+                <img
+                  class="hero_logo__img"
+                  src="/logo.svg"
+                  alt="FUTURE VISION LAB"
+                  decoding="async"
+                />
+              </div>
             </div>
-          
           </div>
           <div class="prose about-block__prose">
             <p
@@ -1730,15 +1806,19 @@ function scrollToPageTop() {
                       String(row.num).padStart(2, '0')
                     }}</span>
                     <p>
-                      {{ row.text
-                      }}<a
-                        v-if="row.url"
-                        :href="row.url"
-                        class="admission-panel__link"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >{{ row.url }}</a
+                      <template
+                        v-for="(segment, si) in admissionTicketTextSegments(row)"
+                        :key="`adm-seg-${i}-${si}`"
                       >
+                        <span v-if="segment.type === 'text'">{{ segment.value }}</span>
+                        <a
+                          v-else
+                          :href="segment.url"
+                          class="admission-panel__link"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >{{ segment.label }}</a>
+                      </template>
                     </p>
                   </li>
                 </template>
@@ -1878,12 +1958,11 @@ function scrollToPageTop() {
             </div>
           </div>
 
-          <div class="credits__group credits__group--artists">
-            <div class="credits__row credits__row--artists">
-              <span class="credits__role">{{ txt.credits.artists.role }}</span>
-              <span class="credits__names">{{ txt.credits.artists.names }}</span>
-            </div>
-          </div>
+          <p class="credits__artists">
+            <span class="credits__artists-role">{{ txt.credits.artists.role }}</span>
+            <span class="credits__artists-sep" aria-hidden="true">｜</span>
+            <span class="credits__artists-names">{{ txt.credits.artists.names }}</span>
+          </p>
 
           <ul class="credits__orgs" role="list">
             <li
@@ -3010,20 +3089,13 @@ a:hover {
   filter: brightness(0) invert(1) drop-shadow(0 2px 14px rgb(0 0 0 / 0.45));
 }
 
-/** 關於我們右上角 logo（由 hero 移入） */
+/** 關於我們標題列旁 logo（高度對齊 About us + 關於我們） */
 .hero_logo {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  width: clamp(24px, 14vw, 96px);
   pointer-events: none;
 }
 
 .hero_logo__img {
   display: block;
-  width: 100%;
-  height: auto;
   object-fit: contain;
 }
 
@@ -3861,21 +3933,45 @@ a:hover {
 }
 
 .about-block__head {
+  margin-bottom: 1.25rem;
+}
+
+.about-block__titles {
   position: relative;
+  width: 100%;
+  padding-right: clamp(5.25rem, 23vw, 11.5rem);
+}
+
+.about-block__title-stack {
   display: flex;
   flex-direction: column;
-  align-items: start;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.15rem 1.25rem;
-  margin-bottom: 1.25rem;
-  text-align: center;
-  padding-right: clamp(3.5rem, 16vw, 7rem);
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.section--about .hero_logo {
+  position: absolute;
+  top: -1.55rem;
+  right: 0;
+  bottom: -1.65rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: auto;
+  pointer-events: none;
+}
+
+.section--about .hero_logo__img {
+  display: block;
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+  object-position: top right;
 }
 
 .about_title {
-  margin-bottom:0.2em;
-  color:#69419b;
+  margin-bottom: 0.2em;
+  color: #69419b;
   padding: 0;
 }
 
@@ -3886,39 +3982,9 @@ a:hover {
 }
 
 .about-block__title {
-  margin: 0 0 1rem;
+  margin: 0;
   width: 100%;
   line-height: 1.5;
-}
-
-.about-block__more {
-  flex-shrink: 0;
-  padding: 0.2rem 0;
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--text-on-light);
-  text-decoration: none;
-  border: none;
-  background: none;
-  box-shadow: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.2s ease;
-}
-
-.about-block__more:hover {
-  color: var(--palette-blue-dim);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-}
-
-.about-block__more:focus-visible {
-  outline: 2px solid rgb(var(--blue-rgb) / 0.55);
-  outline-offset: 3px;
-  border-radius: 3px;
 }
 
 .about-block__prose {
@@ -4010,19 +4076,28 @@ a:hover {
   gap: 0.55rem;
 }
 
-.credits__group--artists {
-  margin-bottom: 2.25rem;
+.credits__artists {
+  margin: 0 0 2.25rem;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--text-on-light);
+  text-align: left;
 }
 
-.credits__row {
-  display: grid;
-  grid-template-columns: minmax(7.5rem, 11.5rem) minmax(0, 1fr);
-  gap: 0.35rem 1rem;
-  align-items: start;
+.credits__artists-role {
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.credits__row--artists {
-  grid-template-columns: minmax(7.5rem, 11.5rem) minmax(0, 1fr);
+.credits__artists-sep {
+  font-weight: 600;
+  opacity: 0.55;
+  margin: 0 0.15em;
+}
+
+.credits__artists-names {
+  font-weight: 400;
+  color: var(--text-on-light);
 }
 
 .credits__role {
@@ -4039,10 +4114,32 @@ a:hover {
   opacity: 0.55;
 }
 
+.credits__row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11.5rem) minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  align-items: start;
+}
+
+:root:lang(en) .credits__row {
+  grid-template-columns: minmax(10.5rem, 16rem) minmax(0, 1fr);
+  gap: 0.35rem 1.35rem;
+}
+
+:root:lang(en) .credits__role {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+:root:lang(en) .credits__artists-role {
+  white-space: normal;
+}
+
 .credits__names {
   font-size: 0.95rem;
   line-height: 1.7;
   color: rgb(var(--blue-rgb) / 0.88);
+  min-width: 0;
 }
 
 .credits__orgs {
@@ -4094,8 +4191,7 @@ a:hover {
 }
 
 @media (max-width: 720px) {
-  .credits__row,
-  .credits__row--artists {
+  .credits__row {
     grid-template-columns: 1fr;
     gap: 0.15rem;
   }
@@ -4191,7 +4287,7 @@ a:hover {
   line-height: 1.35;
   letter-spacing: 0.02em;
   margin: 0;
-  color: var(--section-heading-terracotta);
+  color: #000;
 }
 
 .works-marquee-bleed {
@@ -4516,7 +4612,7 @@ a:hover {
   padding: 0.2rem 0 0.35rem;
   border: none;
   background: transparent;
-  color: rgb(var(--blue-rgb) / 0.56);
+  color: rgb(0 0 0 / 0.45);
   cursor: pointer;
   font-family: var(--font-body);
   font-size: clamp(0.95rem, 2.5vw, 1.08rem);
@@ -4544,7 +4640,7 @@ a:hover {
 
 .works-detail__tab:hover,
 .works-detail__tab--active {
-  color: var(--on-accent);
+  color: #000;
 }
 
 .works-detail__tab:hover {
@@ -5501,5 +5597,14 @@ a:hover {
   z-index: 62;
   pointer-events: none;
   background: transparent;
+}
+
+/** 手機／觸控：隱藏游標拖曳方塊層 */
+@media (hover: none), (pointer: coarse) {
+  .mouse-trail-invert-canvas,
+  .mouse-trail-text-canvas,
+  .mouse-trail-canvas {
+    display: none !important;
+  }
 }
 </style>

@@ -15,6 +15,12 @@ type UnzipAuthor = {
   name_zh_tw?: string | null
   display_name?: string | null
   image_1920_media?: UnzipMedia | null
+  introduction?: string | null
+  introduction_zh_tw?: string | null
+  biography?: string | null
+  biography_zh_tw?: string | null
+  description?: string | null
+  description_zh_tw?: string | null
 }
 
 type UnzipCollective = UnzipAuthor & {
@@ -301,27 +307,30 @@ function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
 }
 
 function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
-  const contributors = work.contributors ?? []
-  const collectives = work.collectives ?? []
-  /** 有個別創作者照片時優先顯示個人，避免團體與個人重複 */
-  const hasContributorPhotos = contributors.some((c) => !!c.image_1920_media?.url?.trim())
-  const authorType: WorkArtist['authorType'] = hasContributorPhotos ? 'contributor' : 'collective'
-  const authors = hasContributorPhotos ? contributors : collectives
   const seen = new Set<string>()
   const artists: WorkArtist[] = []
 
-  for (const author of authors) {
-    const photoUrl = author.image_1920_media?.url?.trim()
-    if (!photoUrl) continue
-    const name = pickAuthorName(lang, author)
-    if (!name) continue
-    const id = author.id
-    if (id == null) continue
-    const key = `${authorType}-${id}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    artists.push({ id, authorType, name, photoUrl })
+  const pushAuthors = (
+    authors: readonly (UnzipCollective | UnzipContributor)[],
+    authorType: WorkArtist['authorType'],
+  ) => {
+    for (const author of authors) {
+      const photoUrl = author.image_1920_media?.url?.trim()
+      if (!photoUrl) continue
+      const name = pickAuthorName(lang, author)
+      if (!name) continue
+      const id = author.id
+      if (id == null) continue
+      const key = `${authorType}-${id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      artists.push({ id, authorType, name, photoUrl })
+    }
   }
+
+  /** 團隊與個人可能同時存在（如《新摩登時代》），兩者都顯示 */
+  pushAuthors(work.collectives ?? [], 'collective')
+  pushAuthors(work.contributors ?? [], 'contributor')
 
   return artists
 }
@@ -333,7 +342,11 @@ function buildArtistBioFallback(
   const contributorsHavePhotos = (work.contributors ?? []).some(
     (author) => !!author.image_1920_media?.url?.trim(),
   )
-  if (!contributorsHavePhotos) return undefined
+  const collectivesHavePhotos = (work.collectives ?? []).some(
+    (author) => !!author.image_1920_media?.url?.trim(),
+  )
+  /** 團隊已列入藝術家清單時，不再用團體簡介作個人 fallback */
+  if (!contributorsHavePhotos || collectivesHavePhotos) return undefined
 
   const collective = (work.collectives ?? []).find(
     (author) => author.id != null && !!pickAuthorName(lang, author),
@@ -385,32 +398,70 @@ export function artistBioCacheKey(artist: Pick<WorkArtist, 'id' | 'authorType'>)
   return `${artist.authorType}-${artist.id}`
 }
 
+function pickAuthorBioText(
+  lang: Lang,
+  author: UnzipAuthor,
+  authorType: WorkArtist['authorType'],
+): string {
+  if (authorType === 'contributor') {
+    return (
+      pickLocalizedText(lang, author.introduction_zh_tw, author.introduction) ||
+      pickLocalizedText(lang, author.biography_zh_tw, author.biography)
+    )
+  }
+  return pickLocalizedText(lang, author.description_zh_tw, author.description)
+}
+
+async function fetchArtistBioFromWorkDetail(
+  workId: number,
+  artist: Pick<WorkArtist, 'id' | 'authorType'>,
+  lang: Lang,
+  signal?: AbortSignal,
+): Promise<string> {
+  const json = await fetchUnzipJson<{ data?: UnzipWork }>(`/works/${workId}`, {}, signal)
+  const work = json.data
+  if (!work) return ''
+
+  const authors =
+    artist.authorType === 'contributor' ? work.contributors ?? [] : work.collectives ?? []
+  const match = authors.find((author) => author.id === artist.id)
+  if (!match) return ''
+
+  return pickAuthorBioText(lang, match, artist.authorType)
+}
+
 export async function fetchArtistBio(
   artist: Pick<WorkArtist, 'id' | 'authorType'>,
   lang: Lang,
   _apiKey: string,
   signal?: AbortSignal,
+  workId?: number,
 ): Promise<string> {
+  let raw = ''
   const path =
     artist.authorType === 'collective'
       ? `/collectives/${artist.id}`
       : `/contributors/${artist.id}`
 
-  const json = await fetchUnzipJson<{ data?: UnzipCollectiveDetail & UnzipContributorDetail }>(
-    path,
-    {},
-    signal,
-  )
-  const data = json.data
-  if (!data) return ''
+  try {
+    const json = await fetchUnzipJson<{ data?: UnzipCollectiveDetail & UnzipContributorDetail }>(
+      path,
+      {},
+      signal,
+    )
+    if (json.data) {
+      raw = pickAuthorBioText(lang, json.data, artist.authorType)
+    }
+  } catch {
+    /* 部分 contributor 為 draft，/contributors/:id 會 404 */
+  }
 
-  let raw = ''
-  if (artist.authorType === 'contributor') {
-    raw =
-      pickLocalizedText(lang, data.introduction_zh_tw, data.introduction) ||
-      pickLocalizedText(lang, data.biography_zh_tw, data.biography)
-  } else {
-    raw = pickLocalizedText(lang, data.description_zh_tw, data.description)
+  if (!raw.trim() && workId != null) {
+    try {
+      raw = await fetchArtistBioFromWorkDetail(workId, artist, lang, signal)
+    } catch {
+      /* 單筆失敗不影響其餘藝術家 */
+    }
   }
 
   return stripHtmlText(raw)

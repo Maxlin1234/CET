@@ -306,6 +306,13 @@ function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
   return name || undefined
 }
 
+/** 《虛迷山》：顯示個人照片、僅顯示團隊介紹，不顯示團體照 */
+function isTeamBioOnlyWork(work: UnzipWork): boolean {
+  const zh = work.title_zh_tw?.trim() ?? ''
+  const en = work.title?.trim() ?? ''
+  return zh === '虛迷山' || en === 'Mount Ecstasy'
+}
+
 function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
   const seen = new Set<string>()
   const artists: WorkArtist[] = []
@@ -328,8 +335,9 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
     }
   }
 
-  /** 團隊與個人可能同時存在（如《新摩登時代》），兩者都顯示 */
-  pushAuthors(work.collectives ?? [], 'collective')
+  if (!isTeamBioOnlyWork(work)) {
+    pushAuthors(work.collectives ?? [], 'collective')
+  }
   pushAuthors(work.contributors ?? [], 'contributor')
 
   return artists
@@ -339,6 +347,16 @@ function buildArtistBioFallback(
   lang: Lang,
   work: UnzipWork,
 ): WorkArtistBioSource | undefined {
+  if (isTeamBioOnlyWork(work)) {
+    const collective = (work.collectives ?? []).find(
+      (author) => author.id != null && !!pickAuthorName(lang, author),
+    )
+    if (collective?.id == null) return undefined
+    const name = pickAuthorName(lang, collective)
+    if (!name) return undefined
+    return { id: collective.id, authorType: 'collective', name }
+  }
+
   const contributorsHavePhotos = (work.contributors ?? []).some(
     (author) => !!author.image_1920_media?.url?.trim(),
   )
@@ -477,6 +495,7 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
   const image = gallery[0] ?? ''
   const artists = buildArtists(lang, work)
   const artistBioFallback = buildArtistBioFallback(lang, work)
+  const teamBioOnly = isTeamBioOnlyWork(work)
 
   return {
     id: work.id,
@@ -488,5 +507,6 @@ export function mapUnzipWorkToCard(work: UnzipWork, lang: Lang): WorkCard {
     body,
     ...(artists.length > 0 ? { artists } : {}),
     ...(artistBioFallback ? { artistBioFallback } : {}),
+    ...(teamBioOnly ? { teamBioOnly: true } : {}),
   }
 }

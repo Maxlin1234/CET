@@ -697,7 +697,13 @@ const worksDetailArtistBioFallback = computed(
   (): WorkArtistBioSource | null => worksDetailCard.value?.artistBioFallback ?? null,
 )
 
-const worksDetailHasArtistPage = computed(() => worksDetailArtists.value.length > 0)
+const worksDetailHasArtistPage = computed(
+  () => worksDetailArtists.value.length > 0 || worksDetailArtistBioFallback.value != null,
+)
+
+const worksDetailTeamBioOnly = computed(
+  () => !!(worksDetailCard.value as { teamBioOnly?: boolean } | null)?.teamBioOnly,
+)
 
 const worksDetailArtistHeading = computed(() => {
   const names = worksDetailArtists.value.map((a) => a.name).filter(Boolean)
@@ -910,7 +916,8 @@ function abortWorksDetailArtistBioFetch() {
 
 async function loadWorksDetailArtistBios() {
   const artists = worksDetailArtists.value
-  if (!artists.length) return
+  const fallback = worksDetailArtistBioFallback.value
+  if (!artists.length && !fallback) return
 
   const workId = worksDetailCard.value?.id
 
@@ -919,8 +926,8 @@ async function loadWorksDetailArtistBios() {
     authorType,
     name,
   }))
-  if (worksDetailArtistBioFallback.value) {
-    sources.push(worksDetailArtistBioFallback.value)
+  if (fallback) {
+    sources.push(fallback)
   }
 
   const uniqueSources = [...new Map(
@@ -2199,6 +2206,7 @@ function scrollToPageTop() {
                   </div>
                 </div>
                 <div class="works-detail__prose">
+                  <h3 class="works-detail__work-title">{{ worksDetailCard.title }}</h3>
                   <div class="works-detail__body">
                     <p
                       v-for="(para, bi) in worksDetailBodyParagraphs"
@@ -2219,7 +2227,11 @@ function scrollToPageTop() {
               :aria-hidden="worksDetailPageIx === 0 ? 'true' : undefined"
             >
               <div class="works-detail__artist-main">
-                <div class="works-detail__artist-media" :aria-label="txt.works.detailArtistsAria">
+                <div
+                  v-if="worksDetailArtists.length"
+                  class="works-detail__artist-media"
+                  :aria-label="txt.works.detailArtistsAria"
+                >
                   <figure
                     v-for="(artist, ai) in worksDetailArtists"
                     :key="`artist-page-${ai}-${artist.id}`"
@@ -2235,27 +2247,29 @@ function scrollToPageTop() {
                   </figure>
                 </div>
                 <div class="works-detail__artist-prose">
-                  <template v-for="(artist, ai) in worksDetailArtists" :key="`artist-bio-${ai}-${artist.id}`">
-                    <div
-                      v-if="worksDetailArtistBioParagraphs(artist).length"
-                      class="works-detail__artist-bio"
-                    >
-                      <h3 class="works-detail__artist-bio-name">
-                        {{ artist.name }}
-                      </h3>
-                      <p
-                        v-for="(para, pi) in worksDetailArtistBioParagraphs(artist)"
-                        :key="`abio-${ai}-${pi}`"
-                        class="works-detail__para"
+                  <template v-if="!worksDetailTeamBioOnly">
+                    <template v-for="(artist, ai) in worksDetailArtists" :key="`artist-bio-${ai}-${artist.id}`">
+                      <div
+                        v-if="worksDetailArtistBioParagraphs(artist).length"
+                        class="works-detail__artist-bio"
                       >
-                        {{ para }}
-                      </p>
-                    </div>
+                        <h3 class="works-detail__artist-bio-name">
+                          {{ artist.name }}
+                        </h3>
+                        <p
+                          v-for="(para, pi) in worksDetailArtistBioParagraphs(artist)"
+                          :key="`abio-${ai}-${pi}`"
+                          class="works-detail__para"
+                        >
+                          {{ para }}
+                        </p>
+                      </div>
+                    </template>
                   </template>
                   <div
                     v-if="
-                      !worksDetailHasIndividualArtistBio &&
-                      worksDetailFallbackBioParagraphs.length
+                      worksDetailFallbackBioParagraphs.length &&
+                      (worksDetailTeamBioOnly || !worksDetailHasIndividualArtistBio)
                     "
                     class="works-detail__artist-bio"
                   >
@@ -2274,8 +2288,10 @@ function scrollToPageTop() {
                     v-if="
                       worksDetailArtistBiosLoading ||
                       (
-                        !worksDetailHasIndividualArtistBio &&
-                        !worksDetailFallbackBioParagraphs.length
+                        worksDetailTeamBioOnly
+                          ? !worksDetailFallbackBioParagraphs.length
+                          : !worksDetailHasIndividualArtistBio &&
+                            !worksDetailFallbackBioParagraphs.length
                       )
                     "
                   >
@@ -5242,6 +5258,16 @@ a:hover {
 
 .works-detail__body {
   margin: 0;
+}
+
+.works-detail__work-title {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-title);
+  font-size: clamp(1.05rem, 2.6vw, 1.3rem);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: var(--on-accent);
 }
 
 .works-detail__para {

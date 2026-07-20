@@ -25,4 +25,6 @@ export type WorkCard = {
   artists?: readonly WorkArtist[]
   /** 個別藝術家無簡介時使用的團體簡介來源 */
   artistBioFallback?: WorkArtistBioSource
+  /** 藝術家分頁：顯示個人照片，但僅顯示團隊文字介紹（如《虛迷山》） */
+  teamBioOnly?: boolean
 }

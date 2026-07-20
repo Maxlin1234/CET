@@ -740,7 +740,7 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
         ],
       ],
       artists: {
-        role: 'Participating Artists',
+        role: 'Artist',
         names:
           'Gabriela Bila, Robert Chang Chien, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia Yakonowsky, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger Prang, Ribs+Seixas, Alexandre Roy, Agata Staszczuk, Calvin SIN, Tote Tiere Maarten, Tim WEI, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
       },

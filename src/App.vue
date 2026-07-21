@@ -8,6 +8,7 @@ import {
   mapUnzipWorkToCard,
   type UnzipWork,
 } from '@/api/unzipWorks'
+import MapRouteOverlay from '@/components/MapRouteOverlay.vue'
 import MapZoneAGoogle from '@/components/MapZoneAGoogle.vue'
 import ScheduleCalendar from '@/components/ScheduleCalendar.vue'
 import type { AdmissionInlineLink, AdmissionTicketItem, Lang, ScheduleProgramMatch } from './i18n'
@@ -1940,7 +1941,10 @@ function scrollToPageTop() {
           <h2 class="section__title">{{ txt.map.title }}</h2>
           <p class="map__hint">{{ txt.map.hint }}</p>
           <div class="map-area" role="region" :aria-label="txt.map.title">
-            <img src="/map.jpeg" alt="map" class="map_img" />
+            <div class="map-area__frame">
+              <img src="/map-1.jpeg" alt="" class="map_img" decoding="async" />
+              <MapRouteOverlay />
+            </div>
           </div>
         </div>
       </section>
@@ -5513,9 +5517,16 @@ a:hover {
   min-height: 260px;
 }
 
+.map-area__frame {
+  position: relative;
+  width: 100%;
+  line-height: 0;
+}
+
 .map_img {
   display: block;
   margin: 0 auto;
+  width: 100%;
   max-width: 100%;
   height: auto;
 }

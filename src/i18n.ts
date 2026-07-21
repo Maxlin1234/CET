@@ -1,3 +1,5 @@
+import { assetUrl } from '@/lib/assetUrl'
+
 export type Lang = 'zh' | 'en'
 
 export type AdmissionInlineLink = {
@@ -402,8 +404,8 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
       cards: [
         {
           title: '濕地迴聲',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           intro:
             '創作者長期以聲音與空間為實驗場域，作品游走於裝置、現場演出與聆聽經驗的交界，關注聽覺如何重塑我們對地景與身體的想像。',
           subtitle: '濕地迴聲 Wetland Echo',
@@ -412,8 +414,8 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         },
         {
           title: '頻移',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           intro: '作品以即時訊號與回授路徑作為方法，藉由身體位移探測城市裡常被忽略的頻率層次。',
           subtitle: '頻移 Frequency Shift',
           body:
@@ -421,30 +423,30 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         },
         {
           title: '天井之下',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           subtitle: '天井之下',
           body:
             '藉由光影與拾得物構築一方垂直天井，召喚建築縫隙裡的時間與風向。材料來自城市邊角，經重新編排成可穿越的微型地景。\n\n觀眾抬頭或俯身時，身體會遭遇不同的光線重量；作品的時間感來自慢速光影與偶發聲響的交錯。',
         },
         {
           title: '天井之下',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           body:
             '藉由光影與拾得物構築一方垂直天井，召喚建築縫隙裡的時間與風向。\n\n空間以節奏而非敘事主導，讓觀者在放慢的步速裡重新感受建築與身體的關係。',
         },
         {
           title: '天井之下',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           body:
             '藉由光影與拾得物構築一方垂直天井，召喚建築縫隙裡的時間與風向；材料與陰影共同書寫一段短暫停留的記憶。',
         },
         {
           title: '天井之下',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           body:
             '藉由光影與拾得物構築一方垂直天井，召喚建築縫隙裡的時間與風向。路徑與視線在天井尺度中被重新校準。',
         },
@@ -478,9 +480,9 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
           '江戶未來世、加布里埃拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿加塔．史塔什丘克、洗筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．提爾．馬騰、Kivi, MONOCOLOR, Meuko! Meuko!, Fantastik Obsolete, Ribs + 塞夏斯',
       },
       orgs: [
-        { role: '主辦單位', name: 'C-LAB', logo: '/C-LAB.png' },
-        { role: '補助單位', name: '文化部', logo: '/文化部.png' },
-        { role: '執行單位', name: '未來視覺實驗室', logo: '/logo.svg' },
+        { role: '主辦單位', name: 'C-LAB', logo: assetUrl('C-LAB.png') },
+        { role: '補助單位', name: '文化部', logo: assetUrl('文化部.png') },
+        { role: '執行單位', name: '未來視覺實驗室', logo: assetUrl('logo.svg') },
       ],
     },
     footer: {
@@ -665,8 +667,8 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
       cards: [
         {
           title: 'Wetland Echo',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           intro:
             'The artist works at the intersection of sound and space—between installation, live performance, and listening as a situated practice—asking how hearing reshapes landscape and embodiment.',
           subtitle: 'Wetland Echo',
@@ -675,8 +677,8 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
         },
         {
           title: 'Frequency Shift',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           intro:
             'Live signal paths and feedback are used as a method to trace frequency layers in the city that often go unnoticed.',
           subtitle: 'Frequency Shift',
@@ -685,30 +687,30 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
         },
         {
           title: 'Below the Patio',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           subtitle: 'Below the Patio',
           body:
             'Light, shadow, and found objects sketch a vertical patio—air and time caught in architectural seams. Materials come from the edges of the city, recomposed into a walkable micro‑landscape.\n\nLooking up or leaning down, the body meets different weights of light; time is carried by slow illumination and incidental sound.',
         },
         {
           title: 'Below the Patio',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg')],
           body:
             'Light, shadow, and found objects sketch a vertical patio—air and time caught in architectural seams.\n\nThe space is led by rhythm rather than plot, inviting a slower pace to re‑feel the relation between body and building.',
         },
         {
           title: 'Below the Patio',
-          image: '/aboutus.jpeg',
-          gallery: ['/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('aboutus.jpeg'),
+          gallery: [assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           body:
             'Light, shadow, and found objects sketch a vertical patio—air and time caught in architectural seams; materials and shadows together inscribe a memory of brief stays.',
         },
         {
           title: 'Below the Patio',
-          image: '/CET.png',
-          gallery: ['/CET.png', '/aboutus.jpeg', '/CET.png'],
+          image: assetUrl('CET.png'),
+          gallery: [assetUrl('CET.png'), assetUrl('aboutus.jpeg'), assetUrl('CET.png')],
           body:
             'Light, shadow, and found objects sketch a vertical patio—air and time caught in architectural seams. Paths and sightlines are recalibrated to the patio scale.',
         },
@@ -745,9 +747,9 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
           'Gabriela Bila, Robert Chang Chien, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia Yakonowsky, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger Prang, Ribs+Seixas, Alexandre Roy, Agata Staszczuk, Calvin SIN, Tote Tiere Maarten, Tim WEI, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
       },
       orgs: [
-        { role: 'Organizer', name: 'C-LAB', logo: '/C-LAB.png' },
-        { role: 'Supported by', name: 'MOC', logo: '/文化部.png' },
-        { role: 'Executive Organizer', name: 'C-LAB Future Vision Lab', logo: '/logo.svg' },
+        { role: 'Organizer', name: 'C-LAB', logo: assetUrl('C-LAB.png') },
+        { role: 'Supported by', name: 'MOC', logo: assetUrl('文化部.png') },
+        { role: 'Executive Organizer', name: 'C-LAB Future Vision Lab', logo: assetUrl('logo.svg') },
       ],
     },
     footer: {

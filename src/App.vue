@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   artistBioCacheKey,
+  extractArtistBiosFromWork,
   fetchArtistBio,
   fetchProjectWorks,
   getWorksApiConfig,
@@ -17,6 +19,8 @@ import type { ScheduleAccent } from '@/types/schedule'
 import type { WorkArtistBioSource, WorkCard } from '@/types/workCard'
 import { Gradient } from '@/Gradient.js'
 import { initGridRevealCanvas } from '@/lib/gridRevealCanvas'
+import { assetUrl } from '@/lib/assetUrl'
+import { isSectionRouteName } from '@/router/index'
 import { initMouseTrailCanvas } from '@/lib/mouseTrailCanvas'
 import { initVantaClouds } from '@/lib/vantaClouds'
 import gsap from 'gsap'
@@ -41,6 +45,8 @@ const mapZoneAZoom = Math.round(envNumber(import.meta.env.VITE_GOOGLE_MAP_A_ZOOM
 
 const lang = ref<Lang>('zh')
 const menuOpen = ref(false)
+const route = useRoute()
+const router = useRouter()
 
 type AdmissionTab = 'notes' | 'tickets'
 const admissionTab = ref<AdmissionTab>('notes')
@@ -55,7 +61,7 @@ const SHOW_HERO_WAVE = false
 /** 關於我們上方漸層高光區（暫時隱藏） */
 const SHOW_ABOUT_GLOW = false
 /** 首屏 Banner 照片（置於 `public/`，與作品區素材一致） */
-const HERO_BANNER_PHOTO_SRC = '/aboutus.jpeg'
+const HERO_BANNER_PHOTO_SRC = assetUrl('aboutus.jpeg')
 
 /** Banner 主／副標：拆字＋字重動畫節點（見 setupHeroFontWeightEffect） */
 const heroTitleFontWeightRef = ref<HTMLElement | null>(null)
@@ -676,6 +682,8 @@ const worksDetailPageIx = ref(0)
 const worksDetailArtistBioMap = ref<Record<string, string>>({})
 const worksDetailArtistBiosLoading = ref(false)
 let worksDetailArtistBioAbort: AbortController | null = null
+/** 跨字卡快取藝術家介紹，避免重複請求 */
+const artistBioGlobalCache: Record<string, string> = {}
 
 const worksDetailCard = computed(() => {
   const ix = worksDetailIndex.value
@@ -714,6 +722,50 @@ const worksDetailArtistHeading = computed(() => {
 
 function worksDetailArtistBioKey(artist: { id: number; authorType: string }) {
   return artistBioCacheKey(artist as { id: number; authorType: 'collective' | 'contributor' })
+}
+
+function artistBioGlobalCacheKey(artist: { id: number; authorType: string }) {
+  return `${lang.value}:${worksDetailArtistBioKey(artist)}`
+}
+
+function seedWorksDetailArtistBios() {
+  const ix = worksDetailIndex.value
+  if (ix == null) return
+
+  const next: Record<string, string> = {}
+
+  const sources: WorkArtistBioSource[] = [
+    ...worksDetailArtists.value.map(({ id, authorType, name }) => ({
+      id,
+      authorType,
+      name,
+    })),
+  ]
+  const fallback = worksDetailArtistBioFallback.value
+  if (fallback) sources.push(fallback)
+
+  for (const source of sources) {
+    const key = worksDetailArtistBioKey(source)
+    const scoped = artistBioGlobalCacheKey(source)
+    const cached = artistBioGlobalCache[scoped]?.trim()
+    if (cached) next[key] = cached
+  }
+
+  const work = apiWorks.value?.[ix]
+  if (work) {
+    for (const [key, bio] of Object.entries(extractArtistBiosFromWork(work, lang.value))) {
+      if (!bio.trim()) continue
+      next[key] = bio
+      artistBioGlobalCache[`${lang.value}:${key}`] = bio
+    }
+  }
+
+  worksDetailArtistBioMap.value = next
+}
+
+function prefetchWorksDetailArtistBios() {
+  if (!worksDetailHasArtistPage.value) return
+  void loadWorksDetailArtistBios()
 }
 
 function worksDetailArtistBioParagraphs(artist: { id: number; authorType: string }) {
@@ -780,6 +832,8 @@ function openWorksDetail(index: number) {
   worksDetailArtistBioMap.value = {}
   worksDetailArtistBiosLoading.value = false
   abortWorksDetailArtistBioFetch()
+  seedWorksDetailArtistBios()
+  prefetchWorksDetailArtistBios()
   nextTick(() => document.getElementById('works-detail-title')?.focus())
 }
 
@@ -937,7 +991,7 @@ async function loadWorksDetailArtistBios() {
 
   const pending = uniqueSources.filter((artist) => {
     const key = worksDetailArtistBioKey(artist)
-    return worksDetailArtistBioMap.value[key] == null
+    return !worksDetailArtistBioMap.value[key]?.trim()
   })
   if (!pending.length) return
 
@@ -980,6 +1034,7 @@ async function loadWorksDetailArtistBios() {
     for (const entry of entries) {
       if (!entry) continue
       next[entry[0]] = entry[1]
+      artistBioGlobalCache[`${lang.value}:${entry[0]}`] = entry[1]
     }
     worksDetailArtistBioMap.value = next
   } finally {
@@ -1475,18 +1530,39 @@ function measureSectionScrollTop(section: HTMLElement): number {
   return Math.max(0, rectTop + scrollY - offset)
 }
 
-function scrollToSection(id: string) {
+function scrollToSectionElement(id: string) {
   if (typeof window === 'undefined') return
   const section = document.getElementById(id)
   if (!section) return
 
-  menuOpen.value = false
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   window.scrollTo({
     top: measureSectionScrollTop(section),
     behavior: reduced ? 'auto' : 'smooth',
   })
 }
+
+function navigateToSection(id: string) {
+  menuOpen.value = false
+  if (route.name === 'section' && route.params.section === id) {
+    scrollToSectionElement(id)
+    return
+  }
+  void router.push({ name: 'section', params: { section: id } })
+}
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await nextTick()
+    requestAnimationFrame(() => {
+      if (route.name === 'home') return
+      const section = route.params.section
+      if (isSectionRouteName(section)) scrollToSectionElement(section)
+    })
+  },
+  { immediate: true },
+)
 
 function scrollToPageTop() {
   if (typeof window === 'undefined') return
@@ -1503,15 +1579,15 @@ function scrollToPageTop() {
   <div class="page">
     <header class="header">
       <div class="header__inner">
-        <a href="/" class="brand">
-          <img class="brand__mark" src="/skyward.svg" width="120" height="120" :alt="txt.siteName" />
-        </a>
+        <RouterLink :to="{ name: 'home' }" class="brand" @click="menuOpen = false">
+          <img class="brand__mark" :src="assetUrl('skyward.svg')" width="120" height="120" :alt="txt.siteName" />
+        </RouterLink>
 
         <div class="header__end">
           <nav id="site-nav" class="nav" :data-open="menuOpen">
             <ul class="nav__list">
               <li v-for="item in navAnchors" :key="item.id">
-                <button type="button" class="nav__link" @click="scrollToSection(item.id)">
+                <button type="button" class="nav__link" @click="navigateToSection(item.id)">
                   <span class="nav__link__label">{{ item.label }}</span>
                 </button>
               </li>
@@ -1563,7 +1639,7 @@ function scrollToPageTop() {
           <div class="hero_title__stack">
             <img
               class="hero_title__img"
-              src="/title.svg"
+              :src="assetUrl('title.svg')"
               alt="FUTURE VISION LAB @ SKYWARD 晴空季"
               decoding="async"
             />
@@ -1626,7 +1702,7 @@ function scrollToPageTop() {
               <span class="hero__cta-ripple__ring" />
               <span class="hero__cta-ripple__ring" />
             </span>
-            <button type="button" class="btn btn--ghost hero__cta-btn" @click="scrollToSection('schedule')">
+            <button type="button" class="btn btn--ghost hero__cta-btn" @click="navigateToSection('schedule')">
               {{ txt.hero.cta }}
             </button>
           </div>
@@ -1634,7 +1710,7 @@ function scrollToPageTop() {
         <div class="hero_title-bottom">
           <img
             class="hero_title-bottom__img"
-            src="/title2.svg"
+            :src="assetUrl('title2.svg')"
             alt="晴空季活動資訊"
             decoding="async"
           />
@@ -1685,7 +1761,7 @@ function scrollToPageTop() {
               <div class="hero_logo">
                 <img
                   class="hero_logo__img"
-                  src="/logo.svg"
+                  :src="assetUrl('logo.svg')"
                   alt="FUTURE VISION LAB"
                   decoding="async"
                 />
@@ -1942,7 +2018,7 @@ function scrollToPageTop() {
           <p class="map__hint">{{ txt.map.hint }}</p>
           <div class="map-area" role="region" :aria-label="txt.map.title">
             <div class="map-area__frame">
-              <img src="/map-1.jpeg" alt="" class="map_img" decoding="async" />
+              <img :src="assetUrl('map-1.jpeg')" alt="" class="map_img" decoding="async" />
               <MapRouteOverlay />
             </div>
           </div>

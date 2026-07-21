@@ -416,6 +416,33 @@ export function artistBioCacheKey(artist: Pick<WorkArtist, 'id' | 'authorType'>)
   return `${artist.authorType}-${artist.id}`
 }
 
+/** 從作品列表 API 已帶的 collective / contributor 欄位擷取介紹（免額外請求） */
+export function extractArtistBiosFromWork(
+  work: UnzipWork,
+  lang: Lang,
+): Record<string, string> {
+  const bios: Record<string, string> = {}
+
+  const pushAuthor = (
+    author: UnzipCollective | UnzipContributor,
+    authorType: WorkArtist['authorType'],
+  ) => {
+    if (author.id == null) return
+    const bio = stripHtmlText(pickAuthorBioText(lang, author, authorType))
+    if (!bio) return
+    bios[artistBioCacheKey({ id: author.id, authorType })] = bio
+  }
+
+  for (const collective of work.collectives ?? []) {
+    pushAuthor(collective, 'collective')
+  }
+  for (const contributor of work.contributors ?? []) {
+    pushAuthor(contributor, 'contributor')
+  }
+
+  return bios
+}
+
 function pickAuthorBioText(
   lang: Lang,
   author: UnzipAuthor,

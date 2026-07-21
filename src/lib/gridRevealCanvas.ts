@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import { assetUrl } from '@/lib/assetUrl'
 
 type GridBox = {
   x: number
@@ -66,7 +67,7 @@ export function initGridRevealCanvas(
   options: GridRevealCanvasOptions = {},
 ): () => void {
   const props = {
-    imgSrc: options.imgSrc ?? '/aboutus.jpeg',
+    imgSrc: options.imgSrc ?? assetUrl('aboutus.jpeg'),
     boxSize: options.boxSize ?? 123,
     fade: options.fade ?? false,
     dots: options.dots ?? true,

@@ -2066,7 +2066,7 @@ function scrollToPageTop() {
                   decoding="async"
                 />
               </div>
-              <span class="credits__org-name">{{ org.name }}</span>
+              <!-- <span class="credits__org-name">{{ org.name }}</span> -->
             </li>
           </ul>
         </div>

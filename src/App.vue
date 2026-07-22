@@ -491,15 +491,13 @@ function setupHeroScrollParallax() {
       )
     }
 
-    /** 用 marginTop 上拉（不用 transform），避免底部出現 1px 深色縫隙 */
+    /** 用 marginTop 上拉（不用 transform）；初始不疊 Banner，避免首屏底部露出白底 */
     if (about) {
-      const aboutMarginBase = 'clamp(-7rem, -16vh, -3.5rem)'
       transition.fromTo(
         about,
-        { marginTop: aboutMarginBase },
+        { marginTop: 0 },
         {
-          marginTop: () =>
-            `calc(${aboutMarginBase} - ${heroHeight() * BG_SHIFT_RATIO}px)`,
+          marginTop: () => `-${heroHeight() * BG_SHIFT_RATIO}px`,
           ease: 'none',
         },
         0,
@@ -4000,11 +3998,11 @@ a:hover {
   }
 }
 
-/** 關於我們：白底；負 margin 疊在 banner 底，視差以 marginTop 上拉（避免 transform 縫隙） */
+/** 關於我們：白底；初始不疊 Banner，捲動視差再以 marginTop 上拉 */
 .section--about {
   position: relative;
   z-index: 2;
-  margin-top: clamp(-7rem, -16vh, -3.5rem);
+  margin-top: 0;
   background: #fff;
   color: var(--text-on-surface);
 }

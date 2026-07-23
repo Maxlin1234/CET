@@ -3,6 +3,10 @@ import type { WorkArtist, WorkArtistBioSource, WorkCard } from '@/types/workCard
 
 type UnzipMedia = {
   url?: string
+  attachment_id?: number | null
+  storage_code?: string | null
+  file_size?: number | null
+  mimetype?: string | null
 }
 
 type UnzipPhoto = {
@@ -268,6 +272,47 @@ function pickLocalizedText(lang: Lang, zh?: string | null, en?: string | null): 
   return enText || zhText
 }
 
+/** 藝術家介紹不跨語言 fallback，避免英文版出現中文姓名／內文 */
+function pickLocalizedTextStrict(lang: Lang, zh?: string | null, en?: string | null): string {
+  const zhText = zh?.trim() ?? ''
+  const enText = en?.trim() ?? ''
+  return lang === 'zh' ? zhText : enText
+}
+
+function hasCjkScript(text: string): boolean {
+  return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/.test(text)
+}
+
+/** 過濾 Odoo 無圖時的 placeholder（/web/image/...、無 attachment） */
+function resolveAuthorPhotoUrl(author: UnzipAuthor): string | undefined {
+  const media = author.image_1920_media
+  const url = media?.url?.trim()
+  if (!url) return undefined
+  if (media?.attachment_id == null && !media?.storage_code) return undefined
+  if (/\/web\/image\//i.test(url) && !/\/cdn\//i.test(url)) return undefined
+  if (typeof media?.file_size === 'number' && media.file_size > 0 && media.file_size < 12_000) {
+    return undefined
+  }
+  return url
+}
+
+function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
+  const zhTw = author.name_zh_tw?.trim() || ''
+  const display = author.display_name?.trim() || ''
+  const name = author.name?.trim() || ''
+
+  if (lang === 'zh') {
+    if (zhTw) return zhTw
+    const cjk = [display, name].find((value) => value && hasCjkScript(value))
+    return cjk || display || name || undefined
+  }
+
+  /** 英文版優先非中日韓姓名，避免 display_name／name 混入中文時顯示錯誤 */
+  const latin = [name, display].find((value) => value && !hasCjkScript(value))
+  if (latin) return latin
+  return name || display || zhTw || undefined
+}
+
 function buildGallery(work: UnzipWork): string[] {
   const featured =
     work.featured_photo_media?.url?.trim() ||
@@ -298,14 +343,6 @@ function buildIntro(lang: Lang, work: UnzipWork): string | undefined {
   return names.join(lang === 'zh' ? '、' : ', ')
 }
 
-function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
-  const name =
-    lang === 'zh'
-      ? author.name_zh_tw?.trim() || author.display_name?.trim() || author.name?.trim()
-      : author.display_name?.trim() || author.name?.trim() || author.name_zh_tw?.trim()
-  return name || undefined
-}
-
 /** 《虛迷山》：顯示個人照片、僅顯示團隊介紹，不顯示團體照 */
 function isTeamBioOnlyWork(work: UnzipWork): boolean {
   const zh = work.title_zh_tw?.trim() ?? ''
@@ -322,8 +359,6 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
     authorType: WorkArtist['authorType'],
   ) => {
     for (const author of authors) {
-      const photoUrl = author.image_1920_media?.url?.trim()
-      if (!photoUrl) continue
       const name = pickAuthorName(lang, author)
       if (!name) continue
       const id = author.id
@@ -331,10 +366,20 @@ function buildArtists(lang: Lang, work: UnzipWork): WorkArtist[] {
       const key = `${authorType}-${id}`
       if (seen.has(key)) continue
       seen.add(key)
-      artists.push({ id, authorType, name, photoUrl })
+      const photoUrl = resolveAuthorPhotoUrl(author)
+      artists.push({
+        id,
+        authorType,
+        name,
+        ...(photoUrl ? { photoUrl } : {}),
+      })
     }
   }
 
+  /**
+   * 團隊與個人都列入介紹；照片有才帶上，無照片不顯示頭像。
+   * 《虛迷山》不放團體照（僅個人照 + 團隊文字介紹）。
+   */
   if (!isTeamBioOnlyWork(work)) {
     pushAuthors(work.collectives ?? [], 'collective')
   }
@@ -358,10 +403,10 @@ function buildArtistBioFallback(
   }
 
   const contributorsHavePhotos = (work.contributors ?? []).some(
-    (author) => !!author.image_1920_media?.url?.trim(),
+    (author) => !!resolveAuthorPhotoUrl(author),
   )
   const collectivesHavePhotos = (work.collectives ?? []).some(
-    (author) => !!author.image_1920_media?.url?.trim(),
+    (author) => !!resolveAuthorPhotoUrl(author),
   )
   /** 團隊已列入藝術家清單時，不再用團體簡介作個人 fallback */
   if (!contributorsHavePhotos || collectivesHavePhotos) return undefined
@@ -450,11 +495,11 @@ function pickAuthorBioText(
 ): string {
   if (authorType === 'contributor') {
     return (
-      pickLocalizedText(lang, author.introduction_zh_tw, author.introduction) ||
-      pickLocalizedText(lang, author.biography_zh_tw, author.biography)
+      pickLocalizedTextStrict(lang, author.introduction_zh_tw, author.introduction) ||
+      pickLocalizedTextStrict(lang, author.biography_zh_tw, author.biography)
     )
   }
-  return pickLocalizedText(lang, author.description_zh_tw, author.description)
+  return pickLocalizedTextStrict(lang, author.description_zh_tw, author.description)
 }
 
 async function fetchArtistBioFromWorkDetail(

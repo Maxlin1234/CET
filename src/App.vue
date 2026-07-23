@@ -700,6 +700,81 @@ const worksDetailArtists = computed(() => {
   return c?.artists ?? []
 })
 
+/** 僅有實際照片的藝術家；無照片／載入失敗不顯示頭像框 */
+const worksDetailArtistPhotoFailed = ref<Record<string, true>>({})
+const worksDetailArtistPhotoLoaded = ref<Record<string, true>>({})
+
+function worksDetailArtistPhotoKey(artist: {
+  id: number
+  authorType: string
+  photoUrl?: string
+}) {
+  const url = artist.photoUrl?.trim() ?? ''
+  return `${artist.authorType}-${artist.id}:${url}`
+}
+
+const worksDetailArtistPhotoCandidates = computed(() =>
+  worksDetailArtists.value.filter((artist) => {
+    const url = artist.photoUrl?.trim()
+    if (!url) return false
+    return !worksDetailArtistPhotoFailed.value[worksDetailArtistPhotoKey(artist)]
+  }),
+)
+
+const worksDetailArtistPhotos = computed(() =>
+  worksDetailArtistPhotoCandidates.value.filter(
+    (artist) => worksDetailArtistPhotoLoaded.value[worksDetailArtistPhotoKey(artist)],
+  ),
+)
+
+function onWorksDetailArtistPhotoLoad(
+  artist: {
+    id: number
+    authorType: string
+    photoUrl?: string
+  },
+  event?: Event,
+) {
+  const key = worksDetailArtistPhotoKey(artist)
+  if (!artist.photoUrl?.trim() || worksDetailArtistPhotoLoaded.value[key]) return
+
+  const img = event?.target
+  if (img instanceof HTMLImageElement) {
+    /** Odoo 預設 placeholder 為 256×256 PNG */
+    const isPlaceholder =
+      img.naturalWidth === 256 &&
+      img.naturalHeight === 256 &&
+      /\/web\/image\//i.test(artist.photoUrl)
+    if (isPlaceholder) {
+      onWorksDetailArtistPhotoError(artist)
+      return
+    }
+  }
+
+  worksDetailArtistPhotoLoaded.value = {
+    ...worksDetailArtistPhotoLoaded.value,
+    [key]: true,
+  }
+}
+
+function onWorksDetailArtistPhotoError(artist: {
+  id: number
+  authorType: string
+  photoUrl?: string
+}) {
+  const url = artist.photoUrl?.trim()
+  if (!url) return
+  const key = worksDetailArtistPhotoKey(artist)
+  if (worksDetailArtistPhotoFailed.value[key]) return
+  const nextLoaded = { ...worksDetailArtistPhotoLoaded.value }
+  delete nextLoaded[key]
+  worksDetailArtistPhotoLoaded.value = nextLoaded
+  worksDetailArtistPhotoFailed.value = {
+    ...worksDetailArtistPhotoFailed.value,
+    [key]: true,
+  }
+}
+
 const worksDetailArtistBioFallback = computed(
   (): WorkArtistBioSource | null => worksDetailCard.value?.artistBioFallback ?? null,
 )
@@ -805,6 +880,34 @@ function splitProseParagraphs(text: string): string[] {
   return text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
 }
 
+type ProseTextSegment =
+  | { type: 'text'; value: string }
+  | { type: 'link'; label: string; url: string }
+
+/** 將段落中的 http(s) URL 切成可點選連結片段 */
+function linkifyTextSegments(text: string): ProseTextSegment[] {
+  const segments: ProseTextSegment[] = []
+  const pattern = /https?:\/\/[^\s<>"'）】》」』]+/gi
+  let lastIndex = 0
+  for (const match of text.matchAll(pattern)) {
+    const raw = match[0] ?? ''
+    const index = match.index ?? 0
+    if (!raw) continue
+    if (index > lastIndex) {
+      segments.push({ type: 'text', value: text.slice(lastIndex, index) })
+    }
+    const url = raw.replace(/[.,;:!?，。；：！？]+$/u, '')
+    const trailing = raw.slice(url.length)
+    if (url) segments.push({ type: 'link', label: url, url })
+    if (trailing) segments.push({ type: 'text', value: trailing })
+    lastIndex = index + raw.length
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', value: text.slice(lastIndex) })
+  }
+  return segments.length ? segments : [{ type: 'text', value: text }]
+}
+
 const worksDetailIntroParagraphs = computed(() => {
   const c = worksDetailCard.value as { intro?: string } | null
   if (!c?.intro?.trim()) return [] as string[]
@@ -829,6 +932,8 @@ function openWorksDetail(index: number) {
   worksDetailPageIx.value = 0
   worksDetailArtistBioMap.value = {}
   worksDetailArtistBiosLoading.value = false
+  worksDetailArtistPhotoFailed.value = {}
+  worksDetailArtistPhotoLoaded.value = {}
   abortWorksDetailArtistBioFetch()
   seedWorksDetailArtistBios()
   prefetchWorksDetailArtistBios()
@@ -1329,6 +1434,15 @@ watch(lang, (l) => {
   localStorage.setItem('usaf-lang', l)
   admissionTab.value = 'notes'
   bindWorksMarqueeSizing()
+  if (worksDetailIndex.value != null) {
+    worksDetailArtistBioMap.value = {}
+    worksDetailArtistBiosLoading.value = false
+    abortWorksDetailArtistBioFetch()
+    seedWorksDetailArtistBios()
+    if (worksDetailHasArtistPage.value) {
+      prefetchWorksDetailArtistBios()
+    }
+  }
 })
 
 /** 「關於我們」上方互動區：八格網格；sx／sy（垂直／水平）主線跟游標，側直線為左右半區中線 */
@@ -1752,15 +1866,15 @@ function scrollToPageTop() {
             <div class="about-block__titles">
               <div class="about-block__title-stack">
                 <div class="about_title">
-                  <h1>About us</h1>
+                  <h1>{{ txt.about.eyebrow }}</h1>
                 </div>
                 <h1 class="section__title about-block__title">{{ txt.about.title }}</h1>
               </div>
-              <div class="hero_logo">
+              <div class="about-block__logo" aria-hidden="true">
                 <img
-                  class="hero_logo__img"
-                  :src="assetUrl('logo.svg')"
-                  alt="FUTURE VISION LAB"
+                  class="about-block__logo-img"
+                  :src="assetUrl('logo2.jpg')"
+                  alt=""
                   decoding="async"
                 />
               </div>
@@ -2043,11 +2157,12 @@ function scrollToPageTop() {
             </div>
           </div>
 
-          <p class="credits__artists">
-            <span class="credits__artists-role">{{ txt.credits.artists.role }}</span>
-            <span class="credits__artists-sep" aria-hidden="true">｜</span>
-            <span class="credits__artists-names">{{ txt.credits.artists.names }}</span>
-          </p>
+          <div class="credits__group">
+            <div class="credits__row">
+              <span class="credits__role">{{ txt.credits.artists.role }}</span>
+              <span class="credits__names">{{ txt.credits.artists.names }}</span>
+            </div>
+          </div>
 
           <ul class="credits__orgs" role="list">
             <li
@@ -2073,9 +2188,7 @@ function scrollToPageTop() {
 
     <footer class="footer">
       <div class="footer__inner">
-        <p>{{ txt.footer.organizer }}</p>
-        <p class="copyfooter__">
-          © 2026 財團法人臺灣生活美學基金會. All Rights Reserved.</p>
+        <p class="footer__copy">{{ txt.footer.copy }}</p>
       </div>
     </footer>
 
@@ -2304,23 +2417,38 @@ function scrollToPageTop() {
               role="tabpanel"
               :aria-hidden="worksDetailPageIx === 0 ? 'true' : undefined"
             >
-              <div class="works-detail__artist-main">
+              <div
+                class="works-detail__artist-main"
+                :class="{
+                  'works-detail__artist-main--no-media': worksDetailArtistPhotos.length === 0,
+                }"
+              >
                 <div
-                  v-if="worksDetailArtists.length"
+                  v-if="worksDetailArtistPhotoCandidates.length"
                   class="works-detail__artist-media"
-                  :aria-label="txt.works.detailArtistsAria"
+                  :class="{
+                    'works-detail__artist-media--blank': worksDetailArtistPhotos.length === 0,
+                  }"
+                  :aria-label="
+                    worksDetailArtistPhotos.length ? txt.works.detailArtistsAria : undefined
+                  "
+                  :aria-hidden="worksDetailArtistPhotos.length === 0 ? 'true' : undefined"
                 >
                   <figure
-                    v-for="(artist, ai) in worksDetailArtists"
+                    v-for="(artist, ai) in worksDetailArtistPhotoCandidates"
                     :key="`artist-page-${ai}-${artist.id}`"
                     class="works-detail__artist"
+                    :hidden="
+                      !worksDetailArtistPhotoLoaded[worksDetailArtistPhotoKey(artist)]
+                    "
                   >
                     <img
                       :src="artist.photoUrl"
                       :alt="artist.name"
                       class="works-detail__artist-photo"
-                      loading="lazy"
                       decoding="async"
+                      @load="onWorksDetailArtistPhotoLoad(artist, $event)"
+                      @error="onWorksDetailArtistPhotoError(artist)"
                     />
                   </figure>
                 </div>
@@ -2339,7 +2467,20 @@ function scrollToPageTop() {
                           :key="`abio-${ai}-${pi}`"
                           class="works-detail__para"
                         >
-                          {{ para }}
+                          <template
+                            v-for="(segment, si) in linkifyTextSegments(para)"
+                            :key="`abio-${ai}-${pi}-seg-${si}`"
+                          >
+                            <a
+                              v-if="segment.type === 'link'"
+                              :href="segment.url"
+                              class="works-detail__bio-link"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              >{{ segment.label }}</a
+                            >
+                            <template v-else>{{ segment.value }}</template>
+                          </template>
                         </p>
                       </div>
                     </template>
@@ -2359,7 +2500,20 @@ function scrollToPageTop() {
                       :key="`fallback-bio-${pi}`"
                       class="works-detail__para"
                     >
-                      {{ para }}
+                      <template
+                        v-for="(segment, si) in linkifyTextSegments(para)"
+                        :key="`fallback-bio-${pi}-seg-${si}`"
+                      >
+                        <a
+                          v-if="segment.type === 'link'"
+                          :href="segment.url"
+                          class="works-detail__bio-link"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          >{{ segment.label }}</a
+                        >
+                        <template v-else>{{ segment.value }}</template>
+                      </template>
                     </p>
                   </div>
                   <template
@@ -4033,34 +4187,13 @@ a:hover {
 .about-block__titles {
   position: relative;
   width: 100%;
-  padding-right: clamp(5.25rem, 23vw, 11.5rem);
+  /* reserve space so title text doesn't overlap the right logo */
+  padding-right: min(42vw, 12.5rem);
+  box-sizing: border-box;
 }
 
 .about-block__title-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
   min-width: 0;
-}
-
-.section--about .hero_logo {
-  position: absolute;
-  top: -1.55rem;
-  right: 0;
-  bottom: -1.65rem;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  width: auto;
-  pointer-events: none;
-}
-
-.section--about .hero_logo__img {
-  display: block;
-  height: 100%;
-  width: auto;
-  object-fit: contain;
-  object-position: top right;
 }
 
 .about_title {
@@ -4075,10 +4208,33 @@ a:hover {
   font-family: var(--font-title);
 }
 
-.about-block__title {
+.section__title.about-block__title {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
   margin: 0;
-  width: 100%;
-  line-height: 1.5;
+  line-height: 1.15;
+}
+
+.about-block__logo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  width: min(40vw, 11.5rem);
+  pointer-events: none;
+}
+
+.about-block__logo-img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: right center;
 }
 
 .about-block__prose {
@@ -4142,11 +4298,11 @@ a:hover {
 .section--credits {
   position: relative;
   background: #fff;
-  color: var(--text-on-surface);
+  color: #000;
 }
 
 .section--credits .section__title {
-  color: var(--text-on-light);
+  color: #000;
   margin-bottom: 0.65rem;
 }
 
@@ -4160,7 +4316,7 @@ a:hover {
   font-size: clamp(1.05rem, 2.2vw, 1.25rem);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--text-on-light);
+  color: #000;
 }
 
 .credits__group {
@@ -4170,42 +4326,12 @@ a:hover {
   gap: 0.55rem;
 }
 
-.credits__artists {
-  margin: 0 0 2.25rem;
-  font-size: 0.95rem;
-  line-height: 1.75;
-  color: var(--text-on-light);
-  text-align: left;
-}
-
-.credits__artists-role {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.credits__artists-sep {
-  font-weight: 600;
-  opacity: 0.55;
-  margin: 0 0.15em;
-}
-
-.credits__artists-names {
-  font-weight: 400;
-  color: var(--text-on-light);
-}
-
 .credits__role {
   font-weight: 700;
   font-size: 0.95rem;
   line-height: 1.55;
-  color: var(--text-on-light);
+  color: #000;
   white-space: nowrap;
-}
-
-.credits__role::after {
-  content: '｜';
-  font-weight: 600;
-  opacity: 0.55;
 }
 
 .credits__row {
@@ -4225,14 +4351,10 @@ a:hover {
   line-height: 1.45;
 }
 
-:root:lang(en) .credits__artists-role {
-  white-space: normal;
-}
-
 .credits__names {
   font-size: 0.95rem;
   line-height: 1.7;
-  color: rgb(var(--blue-rgb) / 0.88);
+  color: #000;
   min-width: 0;
 }
 
@@ -4240,7 +4362,7 @@ a:hover {
   list-style: none;
   margin: 0;
   padding: 1.5rem 0 0;
-  border-top: 1px solid rgb(var(--blue-rgb) / 0.14);
+  border-top: 1px solid rgb(0 0 0 / 0.14);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem 1.5rem;
@@ -4258,7 +4380,7 @@ a:hover {
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: rgb(var(--blue-rgb) / 0.7);
+  color: #000;
 }
 
 .credits__org-logo-wrap {
@@ -4281,7 +4403,7 @@ a:hover {
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--text-on-light);
+  color: #000;
 }
 
 @media (max-width: 720px) {
@@ -5205,7 +5327,7 @@ a:hover {
   object-position: center top;
   border: 2px solid rgb(var(--blue-rgb) / 0.18);
   box-shadow: 0 4px 14px rgb(var(--blue-rgb) / 0.14);
-  background: #e8ecf8;
+  background: transparent;
 }
 
 .works-detail__artists:has(> :only-child) {
@@ -5222,6 +5344,7 @@ a:hover {
 }
 
 .works-detail__artist-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -5248,6 +5371,20 @@ a:hover {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+.works-detail__artist-media--blank {
+  position: absolute;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .works-detail__artist-media:has(> :only-child) {
@@ -5290,6 +5427,18 @@ a:hover {
   margin: 0;
   color: rgb(var(--blue-rgb) / 0.55);
   font-style: italic;
+}
+
+.works-detail__bio-link {
+  color: rgb(var(--blue-rgb));
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.works-detail__bio-link:hover {
+  text-decoration-thickness: 2px;
 }
 
 .works-detail__prose {
@@ -5392,9 +5541,19 @@ a:hover {
 
   .works-detail__artist-main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
     gap: 1.75rem 2rem;
     padding: 1.35rem 1.25rem 1.5rem;
+  }
+
+  .works-detail__artist-main:has(
+    .works-detail__artist-media:not(.works-detail__artist-media--blank)
+  ) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .works-detail__artist-main--no-media {
+    grid-template-columns: 1fr;
   }
 
   .works-detail__artist-media {

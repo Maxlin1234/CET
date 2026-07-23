@@ -4,7 +4,8 @@ export type WorkArtist = {
   id: number
   authorType: WorkArtistAuthorType
   name: string
-  photoUrl: string
+  /** 無照片時不顯示頭像區塊 */
+  photoUrl?: string
   bio?: string
 }
 

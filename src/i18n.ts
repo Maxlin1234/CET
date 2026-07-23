@@ -17,8 +17,11 @@ export type AdmissionTicketItem = {
 const ACCUPASS_ORGANIZER_URL =
   'https://www.accupass.com/organizer/detail/1807130939251014675956'
 
+const FVL_FACEBOOK_URL = 'https://www.facebook.com/CLAB.FUTUREVISIONLAB/'
+const FVL_INSTAGRAM_URL = 'https://www.instagram.com/clab.futurevisionlab/'
+
 /** 8/1、8/2、8/21、8/28 共用同一組節目 */
-const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-28'] as const
+const AUG_SHARED_DATES = ['2026-08-01', '2026-08-02', '2026-08-21', '2026-08-29'] as const
 
 const zhUnitOneIntro =
   '凝視自然、生態與地景的變遷，從生命之初到萬物循環，在穹頂視野中展開一場跨越時間與環境的沉浸旅程。'
@@ -30,17 +33,16 @@ const zhUnitFourIntro =
   '即時生成的聲音與影像在穹頂空間交會，藝術家與觀眾共同參與一場持續生成的沉浸體驗，讓觀看成為彼此感知與回應的過程。'
 
 const enUnitOneIntro =
-  'Contemplating the transformations of nature, ecology, and landscape—from the dawn of life to the cycle of all things—an immersive journey across time and environment unfolds within the panoramic dome.'
+  'Contemplating the transformations of nature, ecology, and landscape—from the dawn of life to the cycle of all things—an immersive journey across time and environment unfolds in the dome.'
 const enUnitTwoIntro =
-  'Light, algorithms, and consciousness intertwine to open multiple dimensions of seeing, reexamining how technological media shape the way we perceive the world.'
+  'Light, algorithms, and consciousness intertwine to open multiple dimensions of viewing, reexamining how technology shapes the way we perceive the world.'
 const enUnitThreeIntro =
   'At the intersection of technology, civilization, and nature, these works portray multiple visions of the future, inviting audiences to sense and imagine unknown worlds.'
 const enUnitFourIntro =
-  'Sound and image generated in real time converge within the dome, as artists and audiences take part in an ever-evolving immersive experience where watching becomes a process of mutual sensing and response.'
+  'Sound and image generated in real time, as artists and audiences take part in an ever-evolving immersive experience where watching becomes a process of mutual perception and response.'
 
 const zhAugSharedPrograms = [
   { name: '萬象之初', creator: '浮點設計', duration: '3 mins', region: '臺灣' },
-  { name: '角鯨之殤', creator: '張簡長倫', duration: '10 mins', region: '臺灣' },
   { name: '入岫：穹頂', creator: '李宸安X鄭乃銓', duration: '9 mins', region: '臺灣' },
   {
     name: '油井之殤：鯨落4993尺',
@@ -50,14 +52,13 @@ const zhAugSharedPrograms = [
   },
   {
     name: 'SAT Fest 2026 獲獎作品',
-    duration: '25 mins',
-    region: '加拿大等',
+    duration: '48 mins',
+    region: '加拿大',
   },
 ] as const
 
 const enAugSharedPrograms = [
   { name: 'Genesis', creator: 'FPA (Floating Point Art)', duration: '3 mins', region: 'Taiwan' },
-  { name: 'Narstalgia', creator: 'Robert Chang Chien', duration: '10 mins', region: 'Taiwan' },
   {
     name: 'Enter the Cave: Dome',
     creator: 'LEE Chen-An X Daniel CHENG',
@@ -72,8 +73,8 @@ const enAugSharedPrograms = [
   },
   {
     name: 'SAT Fest 2026',
-    duration: '25 mins',
-    region: 'Canada, etc.',
+    duration: '48 mins',
+    region: 'Canada',
   },
 ] as const
 
@@ -83,11 +84,12 @@ const AUG_SET_B_DATES = [
   '2026-08-08',
   '2026-08-09',
   '2026-08-22',
-  '2026-08-29',
+  '2026-08-30',
 ] as const
 
 const zhAugSetBPrograms = [
   { name: '幻幕', creator: '葉澈', duration: '3 mins', region: '臺灣' },
+  { name: '角鯨之殤', creator: '張簡長倫', duration: '10 mins', region: '臺灣' },
   { name: '誤差追獵', creator: '魏廷宇', duration: '8 mins', region: '臺灣' },
   { name: '光所到之處', creator: '謝鎮璘', duration: '5 mins', region: '臺灣' },
   { name: '意識之維', creator: 'MONOCOLOR', duration: '15 mins', region: '奧地利' },
@@ -96,6 +98,7 @@ const zhAugSetBPrograms = [
 
 const enAugSetBPrograms = [
   { name: 'What A Screen!', creator: 'YEH Che', duration: '3 mins', region: 'Taiwan' },
+  { name: 'Narstalgia', creator: 'Robert Chang Chien', duration: '10 mins', region: 'Taiwan' },
   { name: 'Stalking for Errors', creator: 'Tim WEI', duration: '8 mins', region: 'Taiwan' },
   {
     name: 'Where Light Arrives',
@@ -117,7 +120,7 @@ const AUG_SET_C_DATES = [
   '2026-08-14',
   '2026-08-15',
   '2026-08-16',
-  '2026-08-30',
+  '2026-08-23',
 ] as const
 
 const zhAugSetCPrograms = [
@@ -192,14 +195,14 @@ export const UNIT_ACCENT_PROGRAM_GROUPS = [
 ] as const
 
 /** 8/23 節目四 */
-const AUG_SET_D_DATES = ['2026-08-23'] as const
+const AUG_SET_D_DATES = ['2026-08-28'] as const
 
 const zhAugSetDPrograms = [
-  { name: '現場 A/VJ', creator: '魏廷宇、TBD', duration: '50 mins', region: '臺灣' },
+  { name: '音像表演', duration: '50 mins', region: '臺灣' },
 ] as const
 
 const enAugSetDPrograms = [
-  { name: 'Live A/VJ', creator: 'Wei Ting-Yu, TBD', duration: '50 mins', region: 'Taiwan' },
+  { name: 'Live A/VJ Performance', duration: '50 mins', region: 'Taiwan' },
 ] as const
 
 /** 節目表（中／英）→ 作品 API 標題關鍵字；供場次點擊開啟作品詳情 */
@@ -222,15 +225,18 @@ function zipScheduleProgramMatches(
 }
 
 export const SCHEDULE_PROGRAM_MATCHES: readonly ScheduleProgramMatch[] = [
-  ...zipScheduleProgramMatches(zhAugSharedPrograms, enAugSharedPrograms, [
-    ['萬象之初', 'Genesis'],
-    ['角鯨之殤', 'Narstalgia'],
-    ['入岫', 'Enter the Cave'],
-    ['油井之殤', '4993 Feet'],
-    ['SAT Fest 2026', '獲獎作品'],
-  ]),
+  ...zipScheduleProgramMatches(
+    zhAugSharedPrograms.filter((p) => !p.name.includes('SAT Fest')),
+    enAugSharedPrograms.filter((p) => !p.name.includes('SAT Fest')),
+    [
+      ['萬象之初', 'Genesis'],
+      ['入岫', 'Enter the Cave'],
+      ['油井之殤', '4993 Feet'],
+    ],
+  ),
   ...zipScheduleProgramMatches(zhAugSetBPrograms, enAugSetBPrograms, [
     ['幻幕', 'What A Screen', 'Ｗhat A Screen'],
+    ['角鯨之殤', 'Narstalgia'],
     ['誤差追獵', 'Stalking for Errors'],
     ['光所到之處', 'Where Light Arrives'],
     ['意識之維', 'NOOSPHERE'],
@@ -244,7 +250,7 @@ export const SCHEDULE_PROGRAM_MATCHES: readonly ScheduleProgramMatch[] = [
     ['虛迷山', 'Mount Ecstasy'],
   ]),
   ...zipScheduleProgramMatches(zhAugSetDPrograms, enAugSetDPrograms, [
-    ['音像節目', 'FVL2026', 'A/VJ'],
+    ['音像表演', 'Live A/VJ Performance', 'A/VJ'],
   ]),
 ]
 
@@ -284,32 +290,33 @@ export const messages = {
         '主辦單位保有調整與變更活動之權利。',
       ],
       ticketsItems: [
-        { kind: 'item', text: '節目索票資訊請鎖定「C-LAB 未來視覺實驗室」臉書 或 IG' },
-        {
-          kind: 'item',
-          text: '詳細節目資訊請至「FUTURE VISION LAB @ 晴空季」官網查詢：',
-          url: 'https://fvl.clab.org.tw/festival/2026',
-        },
         { kind: 'item', text: '採現場排隊依序入場，場內人數額滿為止。' },
-        { kind: 'note', text: '＊註：8/23(日) 為現場表演，入場方式請見【索票節目】說明。' },
+        { kind: 'note', text: '＊註：8/28(五) 為現場表演，入場方式請見【索票節目】說明。' },
         { kind: 'item', text: '場內人數上限為100人，若額滿請等候場內觀眾離場後，依現場人數管制進場。' },
         { kind: 'item', text: '開放入場時若排隊人員不在現場即視同放棄，需重新排隊依序等候入場。' },
         { kind: 'heading', text: '【索票節目】' },
-        { kind: 'lead', text: '索票節目共1檔：8/23(日) 16:00｜《音像表演》' },
+        { kind: 'lead', text: '索票節目共1檔：8/28(五) 17:00 / 19:00｜《音像表演》' },
         { kind: 'item', text: '一人一票憑票入場。' },
         { kind: 'item', text: '開演前10分鐘開放入場，並不開放遲到觀眾入場。' },
         {
           kind: 'item',
-          text: '本節目預計在8/10(一)12:00於ACCUPASS開放索票。',
+          text: '本節目預計在8/5(三)中午12:00於ACCUPASS開放索票。',
           inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
+        },
+        {
+          kind: 'item',
+          text: '索票資訊請鎖定「C-LAB 未來視覺實驗室」臉書 或 IG。',
+          inlineLinks: [
+            { label: '臉書', url: FVL_FACEBOOK_URL },
+            { label: 'IG', url: FVL_INSTAGRAM_URL },
+          ],
         },
       ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
-      title: '關於我們',
-      body: `FUTURE VISION LAB @ 晴空季
-
-C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE VISION LAB」，以數位實驗建築為起點，建構直徑15公尺、全臺唯一的巨型移動式戶外沉浸空間「C-LAB穹頂劇場」(FVL DOME)，探索科技媒體的感知邊界，並展現臺灣科技藝術創作的跨域能量。
+      eyebrow: '關於我們',
+      title: 'FUTURE VISION LAB @ 晴空季',
+      body: `C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE VISION LAB」，以數位實驗建築為起點，建構直徑15公尺、全臺唯一的巨型移動式戶外沉浸空間「C-LAB穹頂劇場」(FVL DOME)，探索科技媒體的感知邊界，並展現臺灣科技藝術創作的跨域能量。
 
 為呼應晴空季策展概念，在曾經承載飛行的場域中，穹頂成為新的感知介面，帶領觀眾穿梭於現實與未來之間的觀看視角，重新思考人類與科技、生態、時間與空間之間的關係，呈現當代科技藝術對未來感知的多重實驗與想像。
 
@@ -466,7 +473,6 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
           { role: '前期建築概念設計', names: '陽明交通大學建築研究所 JHStudio' },
           { role: '建築工程', names: 'achy_made' },
           { role: '聲場設計', names: 'C-LAB 臺灣聲響實驗室' },
-          { role: '音響系統統籌', names: '黑米創意工作室' },
         ],
         [
           { role: '網站設計', names: '林瀚寬' },
@@ -477,18 +483,17 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
       artists: {
         role: '參與藝術家',
         names:
-          '江戶未來世、加布里埃拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿加塔．史塔什丘克、洗筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．提爾．馬騰、Kivi, MONOCOLOR, Meuko! Meuko!, Fantastik Obsolete, Ribs + 塞夏斯',
+          '王新仁、江戶未來世、加布里耶拉．比拉、初未來、吳秉聖、吳克軍、李宸安、拉爾夫．基爾赫茲、亞歷山大．羅伊、阿嘉塔．史塔舒克、洗筱然、林強、姚瑞中、浮點設計、莊禾、張簡長倫、創意星球、葉澈、莉迪亞．雅科諾夫斯基、超維度、郭一、傑瑞米．格里福、霍爾格．普朗、劉承杰、劉東昱、盧德昕、蕭禹琦、陳蘇楊、賴皮、謝鎮璘、鄭乃銓、魏廷宇、托特．蒂爾．馬爾滕、Kivi、MONOCOLOR、Meuko! Meuko!、Fantastik Obsolete、Ribs+Seixas',
       },
       orgs: [
         { role: '主辦單位', name: 'C-LAB', logo: assetUrl('C-LAB.png') },
         { role: '補助單位', name: '文化部', logo: assetUrl('文化部.png') },
-        { role: '執行單位', name: '未來視覺實驗室', logo: assetUrl('logo.svg') },
+        { role: '執行單位', name: '未來視覺實驗室', logo: assetUrl('logo2.jpg') },
       ],
     },
     footer: {
-      organizer: '主辦：C-LAB當代文化實驗場',
       contact: '聯絡： info@clab.org.tw',
-      copy: '© 2026 C-LAB Future Vision Lab. All Rights Reserved.',
+      copy: '© 2026 財團法人臺灣生活美學基金會. All Rights Reserved.',
     },
     /** 右側社群直欄（連結請依實際官方帳號修改） */
     social: {
@@ -540,20 +545,10 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         'Programs may be subject to change.',
       ],
       ticketsItems: [
-        {
-          kind: 'item',
-          text: 'For detailed program registration information, please visit the "C-LAB Future Vision Lab" Facebook page or the event page of C-LAB on ACCUPASS.',
-          inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
-        },
-        {
-          kind: 'item',
-          text: 'For detailed program information, please visit FUTURE VISION LAB 2026 official website: ',
-          url: 'https://fvl.clab.org.tw/festival/2026',
-        },
         { kind: 'item', text: 'Entry will be granted in order of on-site queue until capacity is reached.' },
         {
           kind: 'note',
-          text: '＊Note: Sunday, August 23 features a live performance. Please see the Ticketed Events section for admission information.',
+          text: '＊Note: Friday, August 28 features a live performance. Please see the Ticketed Events section for admission information.',
         },
         {
           kind: 'item',
@@ -564,7 +559,10 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
           text: 'If individuals in the queue are not present when entry opens, they will be considered to have forfeited their places and must rejoin the line in order to wait for entry.',
         },
         { kind: 'heading', text: '【Ticketed Event】' },
-        { kind: 'lead', text: 'Ticketed Event includes August 23 (Fri.) "D/VJ Live performance"' },
+        {
+          kind: 'lead',
+          text: 'Ticketed Event includes 17:00 & 19:00 on August 28 (Fri.) "D/VJ Live performance"',
+        },
         { kind: 'item', text: 'One person, one ticket admission.' },
         {
           kind: 'item',
@@ -572,13 +570,22 @@ C-LAB 未來視覺實驗室自2020年起持續推動實驗展演計畫「FUTURE 
         },
         {
           kind: 'item',
-          text: 'Tickets for this event will open on ACCUPASS on Monday, August 10 at 12:00.',
+          text: 'Tickets will be available on ACCUPASS starting Wednesday, August 5th at 12:00 PM.',
           inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
+        },
+        {
+          kind: 'item',
+          text: 'For detailed program registration information, please visit the "C-LAB Future Vision Lab" Facebook page or Instagram.',
+          inlineLinks: [
+            { label: 'Facebook page', url: FVL_FACEBOOK_URL },
+            { label: 'Instagram', url: FVL_INSTAGRAM_URL },
+          ],
         },
       ] as const satisfies readonly AdmissionTicketItem[],
     },
     about: {
-      title: 'About us',
+      eyebrow: 'About us',
+      title: 'FUTURE VISION LAB @ Skyward',
       body: `Since 2020, the C-LAB Future Vision Lab has developed the “FUTURE VISION LAB” experiment program with Taiwan’s only mobile outdoor dome- “FVL DOME”. Originating from experimental digital architecture, this program explores the boundaries of perception shaped by technology and highlights the interdisciplinary creativity of Taiwan’s tech-art scene.
 
 Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new perceptual interface at the former aviation site, inviting audiences to rethink the relationships between humanity, technology, ecology, time, and space. In August, FVL will screen the selected fulldome films from previous editions, alongside the Taiwan premiere of award-winning pieces from “SAT Fest 2026” by the SAT – Society for Arts and Technology, as well as the live audiovisual performance.`,
@@ -621,14 +628,14 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
         })),
         ...AUG_SET_B_DATES.map((date) => ({
           date,
-          name: 'Program 2 | Through the Senses',
+          name: 'Program 2｜Traversing the Senses',
           groupIntro: enUnitTwoIntro,
           accent: 'blue' as const,
           items: enAugSetBPrograms,
         })),
         ...AUG_SET_C_DATES.map((date) => ({
           date,
-          name: 'Program 3 | Imagining Futures',
+          name: 'Program 3｜Imagining the Future',
           groupIntro: enUnitThreeIntro,
           accent: 'purple' as const,
           items: enAugSetCPrograms,
@@ -648,7 +655,7 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
       legendA: 'Taiwan Contemporary Culture Lab (C-LAB)',
     },
     works: {
-      title: 'Selected works',
+      title: 'Artworks',
       marqueePauseLabel: 'Pause',
       marqueePlayLabel: 'Play',
       marqueePauseAria: 'Pause works carousel',
@@ -733,7 +740,6 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
           },
           { role: 'Architectural Fabrication', names: 'achy_made' },
           { role: 'Sound Field Design', names: 'C-LAB Taiwan Sound Lab' },
-          { role: 'Sound System Coordination', names: 'BlackRice Studio' },
         ],
         [
           { role: 'Website Design', names: 'LIN Han-Kuan' },
@@ -744,18 +750,17 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
       artists: {
         role: 'Artist',
         names:
-          'Gabriela Bila, Robert Chang Chien, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia Yakonowsky, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger Prang, Ribs+Seixas, Alexandre Roy, Agata Staszczuk, Calvin SIN, Tote Tiere Maarten, Tim WEI, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
+          'Gabriela BILÁ, Robert CHANG CHIEN, Ina CHEN, Daniel CHENG, Creative Planet, Sandrine DEUMIER, Damonxart, Dimension Plus, Floating Point Art, Hello Edo!, Hello World, Yuchi HSIAO, Jérémy Griffaud, Yi KUO, Ralph KILLHERTZ, Kivi, Jie LIOU, LIM Giong, LU Te-Hsing, Lydia YAKONOWSKY, Meuko Meuko, MONOCOLOR, Mr. Skin, Fantastik Obsolete, Holger PRANG, Ribs+Seixas, Alexandre ROY, Agata STASZCZUK, Calvin SIN, Tote TIERE MAARTEN, Tim WEI, Aluan WANG, WU Ke-Jyun, WU Ping-Sheng, YAO Jui-Chung, YEH Che',
       },
       orgs: [
         { role: 'Organizer', name: 'C-LAB', logo: assetUrl('C-LAB.png') },
         { role: 'Supported by', name: 'MOC', logo: assetUrl('文化部.png') },
-        { role: 'Executive Organizer', name: 'C-LAB Future Vision Lab', logo: assetUrl('logo.svg') },
+        { role: 'Executive Organizer', name: 'C-LAB Future Vision Lab', logo: assetUrl('logo2.jpg') },
       ],
     },
     footer: {
-      organizer: 'Presented by Urban Culture Fund × Photosynthesis Curatorial Lab',
-      contact: 'Contact: info@urban-spectrum.art',
-      copy: '© 2026 C-LAB Future Vision Lab. All Rights Reserved.',
+      contact: 'Contact: info@clab.org.tw',
+      copy: '© 2026 Taiwan Contemporary Culture Lab. All Rights Reserved.',
     },
     social: {
       railAria: 'Social media',

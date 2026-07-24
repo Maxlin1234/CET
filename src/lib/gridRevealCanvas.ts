@@ -27,6 +27,26 @@ export type GridRevealCanvasOptions = {
   sizeRoot?: HTMLElement
   /** cover 裁切時的垂直錨點（banner 建議 top，避免載入時切掉過多） */
   coverPosition?: 'center' | 'top'
+  /**
+   * cover 縮放：1 = 標準 cover；<1 = 拉遠（露出更多主視覺，可能上下留白）；
+   * >1 = 拉近。未指定時，≤720px 自動用 0.78。
+   */
+  coverZoom?: number
+  /** letterbox 時垂直錨點 0–1（0 靠上、0.5 置中） */
+  coverFocalY?: number
+  /** letterbox 填色 */
+  letterboxColor?: string
+}
+
+type CoverDraw = CoverCrop & {
+  dx: number
+  dy: number
+  outW: number
+  outH: number
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n))
 }
 
 function computeCoverCrop(
@@ -34,13 +54,17 @@ function computeCoverCrop(
   dw: number,
   dh: number,
   coverPosition: 'center' | 'top' = 'center',
-): CoverCrop {
+  coverZoom = 1,
+  coverFocalY = 0.5,
+): CoverDraw {
+  const zoom = coverZoom > 0 ? coverZoom : 1
   const imageRatio = img.naturalWidth / img.naturalHeight
   const canvasRatio = dw / dh
   let sx = 0
   let sy = 0
   let sw = img.naturalWidth
   let sh = img.naturalHeight
+
   if (imageRatio > canvasRatio) {
     sh = img.naturalHeight
     sw = sh * canvasRatio
@@ -50,15 +74,40 @@ function computeCoverCrop(
     sh = sw / canvasRatio
     sy = coverPosition === 'top' ? 0 : (img.naturalHeight - sh) / 2
   }
-  return { sx, sy, sw, sh, dw, dh }
+
+  if (zoom !== 1) {
+    const cx = sx + sw / 2
+    const cy = sy + sh / 2
+    sw = Math.min(img.naturalWidth, sw / zoom)
+    sh = Math.min(img.naturalHeight, sh / zoom)
+    sx = clamp(cx - sw / 2, 0, img.naturalWidth - sw)
+    sy = clamp(cy - sh / 2, 0, img.naturalHeight - sh)
+  }
+
+  let outW = dw
+  let outH = dh
+  let dx = 0
+  let dy = 0
+
+  if (zoom < 1) {
+    const contain = Math.min(dw / sw, dh / sh)
+    outW = sw * contain
+    outH = sh * contain
+    dx = (dw - outW) / 2
+    dy = (dh - outH) * clamp(coverFocalY, 0, 1)
+  }
+
+  return { sx, sy, sw, sh, dw, dh, dx, dy, outW, outH }
 }
 
-function canvasRectToSource(crop: CoverCrop, x: number, y: number, w: number, h: number) {
+function canvasRectToSource(crop: CoverDraw, x: number, y: number, w: number, h: number) {
+  const relX = x - crop.dx
+  const relY = y - crop.dy
   return {
-    sx: crop.sx + (x / crop.dw) * crop.sw,
-    sy: crop.sy + (y / crop.dh) * crop.sh,
-    sw: (w / crop.dw) * crop.sw,
-    sh: (h / crop.dh) * crop.sh,
+    sx: crop.sx + (relX / crop.outW) * crop.sw,
+    sy: crop.sy + (relY / crop.outH) * crop.sh,
+    sw: (w / crop.outW) * crop.sw,
+    sh: (h / crop.outH) * crop.sh,
   }
 }
 
@@ -75,6 +124,9 @@ export function initGridRevealCanvas(
   }
 
   const coverPosition = options.coverPosition ?? 'center'
+  const coverZoomOption = options.coverZoom
+  const coverFocalY = options.coverFocalY ?? 0.32
+  const letterboxColor = options.letterboxColor ?? '#24143a'
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return () => {}
@@ -85,10 +137,11 @@ export function initGridRevealCanvas(
 
   let cw = 0
   let ch = 0
-  let cover: CoverCrop | null = null
+  let cover: CoverDraw | null = null
   let cRect = canvas.getBoundingClientRect()
   let sx = 1
   let sy = 1
+  let activeZoom = 1
 
   const T = Math.PI * 2
   const m = { x: 0, y: 0, s: 1.5, x2: 0, y2: 0 }
@@ -99,14 +152,23 @@ export function initGridRevealCanvas(
   let boxes: GridBox[] = []
   let started = false
   let resizeObserver: ResizeObserver | null = null
+  let mobileZoomMql: MediaQueryList | null = null
 
   context.fillStyle = props.dotColor
 
   const img = new Image()
 
+  function resolveZoom() {
+    if (typeof coverZoomOption === 'number') return coverZoomOption
+    if (typeof window === 'undefined') return 1
+    /** 手機略拉遠，讓穹頂半圓左右多露出一點 */
+    return window.matchMedia('(max-width: 720px)').matches ? 0.65 : 1
+  }
+
   function syncCover() {
     if (img.naturalWidth > 0 && cw > 0 && ch > 0) {
-      cover = computeCoverCrop(img, cw, ch, coverPosition)
+      activeZoom = resolveZoom()
+      cover = computeCoverCrop(img, cw, ch, coverPosition, activeZoom, coverFocalY)
     }
   }
 
@@ -116,7 +178,8 @@ export function initGridRevealCanvas(
     const h = Math.round(sizeRoot.clientHeight)
     if (w <= 0 || h <= 0) return
 
-    const changed = cw !== w || ch !== h
+    const nextZoom = resolveZoom()
+    const changed = cw !== w || ch !== h || activeZoom !== nextZoom
     cw = w
     ch = h
 
@@ -157,6 +220,7 @@ export function initGridRevealCanvas(
     const outer = props.boxSize - boxScaled
     const src = canvasRectToSource(cover, box.x + inner, box.y + inner, outer, outer)
 
+    if (src.sw <= 0 || src.sh <= 0) return
     if (props.fade) context.globalAlpha = box.s
     context.drawImage(
       img,
@@ -183,7 +247,26 @@ export function initGridRevealCanvas(
     const d = Math.hypot(m.x - m.x2, m.y - m.y2)
     sTo(d / cw * 2)
     context.clearRect(0, 0, cw, ch)
-    context.drawImage(img, cover.sx, cover.sy, cover.sw, cover.sh, 0, 0, cw, ch)
+    if (activeZoom < 1) {
+      const grad = context.createLinearGradient(0, 0, 0, ch)
+      grad.addColorStop(0, '#1a0f33')
+      grad.addColorStop(0.45, letterboxColor)
+      grad.addColorStop(1, '#3a2460')
+      context.fillStyle = grad
+      context.fillRect(0, 0, cw, ch)
+      context.fillStyle = props.dotColor
+    }
+    context.drawImage(
+      img,
+      cover.sx,
+      cover.sy,
+      cover.sw,
+      cover.sh,
+      cover.dx,
+      cover.dy,
+      cover.outW,
+      cover.outH,
+    )
     boxes.forEach(drawImg)
     if (props.dots) boxes.forEach(drawDots)
   }
@@ -209,6 +292,10 @@ export function initGridRevealCanvas(
     resizeCanvas()
   }
 
+  function onMobileZoomChange() {
+    resizeCanvas()
+  }
+
   function start() {
     if (started) return
     started = true
@@ -217,6 +304,10 @@ export function initGridRevealCanvas(
     gsap.ticker.add(update)
     pointerRoot.addEventListener('pointermove', onPointerMove, { passive: true })
     window.addEventListener('resize', onResize)
+    if (typeof window !== 'undefined' && typeof coverZoomOption !== 'number') {
+      mobileZoomMql = window.matchMedia('(max-width: 720px)')
+      mobileZoomMql.addEventListener('change', onMobileZoomChange)
+    }
     if (sizeRoot && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => resizeCanvas())
       resizeObserver.observe(sizeRoot)
@@ -232,6 +323,8 @@ export function initGridRevealCanvas(
     gsap.ticker.remove(update)
     pointerRoot.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('resize', onResize)
+    mobileZoomMql?.removeEventListener('change', onMobileZoomChange)
+    mobileZoomMql = null
     resizeObserver?.disconnect()
     resizeObserver = null
     gsap.killTweensOf(m)

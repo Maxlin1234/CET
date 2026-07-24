@@ -309,6 +309,9 @@ function initHeroGridRevealCanvas() {
       boxSize: 60,
       dots: false,
       coverPosition: 'top',
+      /** 手機拉遠一點，讓主視覺半圓左右多露出 */
+      coverFocalY: 0.32,
+      letterboxColor: '#24143a',
       pointerRoot: heroSection instanceof HTMLElement ? heroSection : undefined,
       sizeRoot: wrap,
     })
@@ -3215,7 +3218,8 @@ a:hover {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  background: transparent;
+  /** 手機 banner zoom-out letterbox 同色，避免露白 */
+  background: #24143a;
 }
 
 .hero__photo {
@@ -4252,6 +4256,33 @@ a:hover {
 
 .about-block__para:last-child {
   margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .about-block__titles {
+    column-gap: 0.4rem;
+  }
+
+  .about-block__title-stack {
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .section__title.about-block__title {
+    white-space: nowrap;
+    /* 單行縮字，中英文都不換行、也不壓到 logo */
+    font-size: clamp(0.68rem, 3.15vw, 1.05rem);
+    line-height: 1.2;
+  }
+
+  .about-block__logo {
+    width: clamp(2.85rem, 17vw, 4.15rem);
+    align-self: center;
+  }
+
+  .section--about {
+    padding-right: 3.35rem;
+  }
 }
 
 /** 場次表：白底＋字卡；與關於我們重疊 1px，消除捲動時底部細線 */

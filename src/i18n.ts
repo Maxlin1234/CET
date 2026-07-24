@@ -470,7 +470,6 @@ export const messages = {
           { role: '技術執行', names: '劉嘉昀、邱文雍、楊泓軒' },
         ],
         [
-          { role: '前期建築概念設計', names: '陽明交通大學建築研究所 JHStudio' },
           { role: '建築工程', names: 'achy_made' },
           { role: '聲場設計', names: 'C-LAB 臺灣聲響實驗室' },
         ],
@@ -734,10 +733,6 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
           { role: 'Technical Coordinator', names: 'LIU Chia-Yun, CHIU Wen-Yung, Snow YANG' },
         ],
         [
-          {
-            role: 'Preliminary Conceptual Design',
-            names: 'JHStudio, Department of Architecture, National Yang Ming Chiao Tung University',
-          },
           { role: 'Architectural Fabrication', names: 'achy_made' },
           { role: 'Sound Field Design', names: 'C-LAB Taiwan Sound Lab' },
         ],

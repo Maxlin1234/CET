@@ -98,7 +98,7 @@ const zhAugSetBPrograms = [
 
 const enAugSetBPrograms = [
   { name: 'What A Screen!', creator: 'YEH Che', duration: '3 mins', region: 'Taiwan' },
-  { name: 'Narstalgia', creator: 'Robert Chang Chien', duration: '10 mins', region: 'Taiwan' },
+  { name: 'Narstalgia', creator: 'Robert CHANG CHIEN', duration: '10 mins', region: 'Taiwan' },
   { name: 'Stalking for Errors', creator: 'Tim WEI', duration: '8 mins', region: 'Taiwan' },
   {
     name: 'Where Light Arrives',
@@ -202,7 +202,7 @@ const zhAugSetDPrograms = [
 ] as const
 
 const enAugSetDPrograms = [
-  { name: 'Live A/VJ Performance', duration: '50 mins', region: 'Taiwan' },
+  { name: 'D/VJ Live Performance', duration: '50 mins', region: 'Taiwan' },
 ] as const
 
 /** 節目表（中／英）→ 作品 API 標題關鍵字；供場次點擊開啟作品詳情 */
@@ -250,7 +250,7 @@ export const SCHEDULE_PROGRAM_MATCHES: readonly ScheduleProgramMatch[] = [
     ['虛迷山', 'Mount Ecstasy'],
   ]),
   ...zipScheduleProgramMatches(zhAugSetDPrograms, enAugSetDPrograms, [
-    ['音像表演', 'Live A/VJ Performance', 'A/VJ'],
+    ['音像表演', 'D/VJ Live Performance', 'A/VJ', 'D/VJ'],
   ]),
 ]
 
@@ -561,7 +561,7 @@ export const messages = {
         { kind: 'heading', text: '【Ticketed Event】' },
         {
           kind: 'lead',
-          text: 'Ticketed Event includes 17:00 & 19:00 on August 28 (Fri.) "D/VJ Live performance"',
+          text: 'Ticketed Event includes 17:00 & 19:00 on August 28 (Fri.) "D/VJ Live Performance"',
         },
         { kind: 'item', text: 'One person, one ticket admission.' },
         {

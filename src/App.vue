@@ -3634,7 +3634,7 @@ a:hover {
 .admission-panel__title {
   margin: 0 auto 1.35rem;
   font-family: var(--font-title);
-  font-weight: 800;
+  font-weight: 600;
   font-size: clamp(32px, 2.5vw, 72px);
   line-height: 1.35;
   letter-spacing: 0.02em;
@@ -4177,7 +4177,7 @@ a:hover {
 }
 
 .section__inner--about {
-  max-width: 52rem;
+  max-width: 960px;
 }
 
 .about-block__head {
@@ -4185,15 +4185,17 @@ a:hover {
 }
 
 .about-block__titles {
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1.25rem;
+  align-items: stretch;
   width: 100%;
-  /* reserve space so title text doesn't overlap the right logo */
-  padding-right: min(42vw, 12.5rem);
-  box-sizing: border-box;
 }
 
 .about-block__title-stack {
   min-width: 0;
+  /* keep title glyphs from painting over the logo column */
+  overflow: hidden;
 }
 
 .about_title {
@@ -4210,21 +4212,21 @@ a:hover {
 
 .section__title.about-block__title {
   display: block;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   margin: 0;
   line-height: 1.15;
+  white-space: nowrap;
+  /* leave room for the right-side logo; shrink so text stays on one line */
+  font-size: clamp(1.05rem, 2.55vw, 3.25rem);
 }
 
 .about-block__logo {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  grid-column: 2;
   display: flex;
   align-items: stretch;
   justify-content: flex-end;
-  width: min(40vw, 11.5rem);
+  width: clamp(5.5rem, 18vw, 9.75rem);
   pointer-events: none;
 }
 
@@ -4498,7 +4500,7 @@ a:hover {
 
 .works-board__title {
   font-family: var(--font-title);
-  font-weight: 800;
+  font-weight: 600;
   font-size: clamp(32px, 2.5vw, 72px);
   line-height: 1.35;
   letter-spacing: 0.02em;

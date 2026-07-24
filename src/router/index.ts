@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 /** 活動站根路徑（對應另一專案的 /festival/2026） */
-export const APP_BASE_PATH = '/event/sky'
+export const APP_BASE_PATH = '/event/skyward'
 
 export const SECTION_ROUTE_NAMES = [
   'about',

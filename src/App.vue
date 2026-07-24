@@ -4409,13 +4409,22 @@ a:hover {
 }
 
 @media (max-width: 720px) {
-  .credits__row {
-    grid-template-columns: 1fr;
-    gap: 0.15rem;
+  /* 蓋過 :root:lang(en) 的兩欄寬度，讓職位換行、人名往左靠 */
+  .credits__row,
+  :root:lang(en) .credits__row {
+    grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+    gap: 0.2rem 0.65rem;
   }
 
-  .credits__role {
+  .credits__role,
+  :root:lang(en) .credits__role {
     white-space: normal;
+    line-height: 1.35;
+  }
+
+  .section--credits {
+    /* 避開右側 social rail，避免人名被遮 */
+    padding-right: 4rem;
   }
 
   .credits__orgs {

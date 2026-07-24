@@ -4217,8 +4217,8 @@ a:hover {
   margin: 0;
   line-height: 1.15;
   white-space: nowrap;
-  /* leave room for the right-side logo; shrink so text stays on one line */
-  font-size: clamp(1.05rem, 2.55vw, 3.25rem);
+  /* leave room for the right-side logo; keep full title visible on one line */
+  font-size: clamp(0.95rem, 2.15vw, 2.65rem);
 }
 
 .about-block__logo {

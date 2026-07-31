@@ -683,7 +683,7 @@ const worksDetailPageIx = ref(0)
 const worksDetailArtistBioMap = ref<Record<string, string>>({})
 const worksDetailArtistBiosLoading = ref(false)
 let worksDetailArtistBioAbort: AbortController | null = null
-/** 跨字卡快取藝術家介紹，避免重複請求 */
+/** 藝術家介紹軟快取：僅供開啟詳情時立刻顯示，每次仍會向 API 重新驗證 */
 const artistBioGlobalCache: Record<string, string> = {}
 
 const worksDetailCard = computed(() => {
@@ -1095,16 +1095,17 @@ async function loadWorksDetailArtistBios() {
     sources.map((source) => [worksDetailArtistBioKey(source), source]),
   ).values()]
 
-  const pending = uniqueSources.filter((artist) => {
-    const key = worksDetailArtistBioKey(artist)
-    return !worksDetailArtistBioMap.value[key]?.trim()
-  })
-  if (!pending.length) return
+  // 一律向 API 重新驗證，避免 CMS 更新後仍顯示舊介紹；有種子文時不顯示 loading
+  const hasAnySeededBio = uniqueSources.some((artist) =>
+    !!worksDetailArtistBioMap.value[worksDetailArtistBioKey(artist)]?.trim(),
+  )
 
   abortWorksDetailArtistBioFetch()
   const controller = new AbortController()
   worksDetailArtistBioAbort = controller
-  worksDetailArtistBiosLoading.value = true
+  if (!hasAnySeededBio) {
+    worksDetailArtistBiosLoading.value = true
+  }
 
   const { mode, key: apiKey } = getWorksApiConfig()
   if (mode === 'direct' && !apiKey.trim()) {
@@ -1115,7 +1116,7 @@ async function loadWorksDetailArtistBios() {
 
   try {
     const entries = await Promise.all(
-      pending.map(async (artist) => {
+      uniqueSources.map(async (artist) => {
         const cacheKey = worksDetailArtistBioKey(artist)
         try {
           const bio = await fetchArtistBio(
@@ -1129,7 +1130,8 @@ async function loadWorksDetailArtistBios() {
         } catch (err) {
           if (controller.signal.aborted) return null
           console.warn('[CET] artist bio fetch failed', artist.name, err)
-          return [cacheKey, ''] as const
+          // 請求失敗時保留既有種子／快取，避免把畫面洗成空白
+          return null
         }
       }),
     )

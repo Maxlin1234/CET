@@ -123,7 +123,7 @@ async function fetchUnzipJson<T>(
         : buildDirectRequest(path, query, config.key)
 
     try {
-      const res = await fetch(url, { signal, headers })
+      const res = await fetch(url, { signal, headers, cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`Unzip API failed (${mode}): ${res.status} ${res.statusText}`)
       }

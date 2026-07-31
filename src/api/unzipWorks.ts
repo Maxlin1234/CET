@@ -123,6 +123,7 @@ async function fetchUnzipJson<T>(
         : buildDirectRequest(path, query, config.key)
 
     try {
+      // 只用 cache:'no-store'；勿加自訂 Cache-Control／Pragma（會觸發 CORS preflight）
       const res = await fetch(url, { signal, headers, cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`Unzip API failed (${mode}): ${res.status} ${res.statusText}`)
@@ -130,9 +131,7 @@ async function fetchUnzipJson<T>(
       return (await res.json()) as T
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
-      if (import.meta.env.PROD) {
-        console.warn('[works] fetch failed', { mode, path, error: lastError.message })
-      }
+      console.warn('[works] fetch failed', { mode, path, error: lastError.message })
     }
   }
 
@@ -190,6 +189,20 @@ async function fetchWorkDetail(
     const json = await fetchUnzipJson<{
       data?: Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'>
     }>(`/works/${workId}`, {}, signal)
+    return json.data ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 開啟詳情時重抓單筆，讓作品嵌套的藝術家介紹跟著 CMS 更新 */
+export async function fetchWorkById(
+  workId: number,
+  _apiKey: string,
+  signal?: AbortSignal,
+): Promise<UnzipWork | null> {
+  try {
+    const json = await fetchUnzipJson<{ data?: UnzipWork }>(`/works/${workId}`, {}, signal)
     return json.data ?? null
   } catch {
     return null
@@ -283,6 +296,22 @@ function hasCjkScript(text: string): boolean {
   return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/.test(text)
 }
 
+/** 每次整頁載入產生一次，強制藝術家照片重新向 CDN 請求 */
+const PAGE_MEDIA_CACHE_BUST = String(Date.now())
+
+export function withMediaCacheBust(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return trimmed
+  try {
+    const parsed = new URL(trimmed)
+    parsed.searchParams.set('_ts', PAGE_MEDIA_CACHE_BUST)
+    return parsed.toString()
+  } catch {
+    const join = trimmed.includes('?') ? '&' : '?'
+    return `${trimmed}${join}_ts=${PAGE_MEDIA_CACHE_BUST}`
+  }
+}
+
 /** 過濾 Odoo 無圖時的 placeholder（/web/image/...、無 attachment） */
 function resolveAuthorPhotoUrl(author: UnzipAuthor): string | undefined {
   const media = author.image_1920_media
@@ -293,7 +322,7 @@ function resolveAuthorPhotoUrl(author: UnzipAuthor): string | undefined {
   if (typeof media?.file_size === 'number' && media.file_size > 0 && media.file_size < 12_000) {
     return undefined
   }
-  return url
+  return withMediaCacheBust(url)
 }
 
 function pickAuthorName(lang: Lang, author: UnzipAuthor): string | undefined {
@@ -494,10 +523,17 @@ function pickAuthorBioText(
   authorType: WorkArtist['authorType'],
 ): string {
   if (authorType === 'contributor') {
-    return (
-      pickLocalizedTextStrict(lang, author.introduction_zh_tw, author.introduction) ||
-      pickLocalizedTextStrict(lang, author.biography_zh_tw, author.biography)
+    const introduction = pickLocalizedTextStrict(
+      lang,
+      author.introduction_zh_tw,
+      author.introduction,
     )
+    const biography = pickLocalizedTextStrict(lang, author.biography_zh_tw, author.biography)
+    // 兩欄都有時取較長者，避免舊短介紹擋下已更新的完整 biography
+    if (introduction && biography) {
+      return biography.length >= introduction.length ? biography : introduction
+    }
+    return introduction || biography
   }
   return pickLocalizedTextStrict(lang, author.description_zh_tw, author.description)
 }
@@ -526,8 +562,10 @@ export async function fetchArtistBio(
   _apiKey: string,
   signal?: AbortSignal,
   workId?: number,
+  /** 已重抓的作品嵌套介紹，避免每名藝術家再打 /works/:id */
+  fallbackBio?: string,
 ): Promise<string> {
-  let raw = ''
+  let authorRaw = ''
   const path =
     artist.authorType === 'collective'
       ? `/collectives/${artist.id}`
@@ -540,20 +578,30 @@ export async function fetchArtistBio(
       signal,
     )
     if (json.data) {
-      raw = pickAuthorBioText(lang, json.data, artist.authorType)
+      authorRaw = pickAuthorBioText(lang, json.data, artist.authorType)
     }
   } catch {
     /* 部分 contributor 為 draft，/contributors/:id 會 404 */
   }
 
-  if (!raw.trim() && workId != null) {
+  let workRaw = fallbackBio?.trim() || ''
+  if (!workRaw && !authorRaw.trim() && workId != null) {
     try {
-      raw = await fetchArtistBioFromWorkDetail(workId, artist, lang, signal)
+      workRaw = await fetchArtistBioFromWorkDetail(workId, artist, lang, signal)
     } catch {
       /* 單筆失敗不影響其餘藝術家 */
     }
   }
 
+  const author = authorRaw.trim()
+  const nested = workRaw.trim()
+  // 兩邊都有時取較長者，避免舊文擋下剛更新的完整介紹
+  const raw =
+    author && nested
+      ? nested.length > author.length
+        ? nested
+        : author
+      : author || nested
   return stripHtmlText(raw)
 }
 

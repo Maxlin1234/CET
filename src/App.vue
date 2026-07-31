@@ -6,6 +6,7 @@ import {
   extractArtistBiosFromWork,
   fetchArtistBio,
   fetchProjectWorks,
+  fetchWorkById,
   getWorksApiConfig,
   mapUnzipWorkToCard,
   type UnzipWork,
@@ -683,8 +684,8 @@ const worksDetailPageIx = ref(0)
 const worksDetailArtistBioMap = ref<Record<string, string>>({})
 const worksDetailArtistBiosLoading = ref(false)
 let worksDetailArtistBioAbort: AbortController | null = null
-/** 藝術家介紹軟快取：僅供開啟詳情時立刻顯示，每次仍會向 API 重新驗證 */
-const artistBioGlobalCache: Record<string, string> = {}
+/** 用來取消過期的「重抓作品＋藝術家介紹」流程 */
+let worksDetailPrepareGen = 0
 
 const worksDetailCard = computed(() => {
   const ix = worksDetailIndex.value
@@ -800,48 +801,117 @@ function worksDetailArtistBioKey(artist: { id: number; authorType: string }) {
   return artistBioCacheKey(artist as { id: number; authorType: 'collective' | 'contributor' })
 }
 
-function artistBioGlobalCacheKey(artist: { id: number; authorType: string }) {
-  return `${lang.value}:${worksDetailArtistBioKey(artist)}`
+async function refreshWorksDetailWorkFromApi() {
+  const ix = worksDetailIndex.value
+  const workId = worksDetailCard.value?.id
+  if (ix == null || workId == null || !apiWorks.value) return
+
+  const { mode, key: apiKey } = getWorksApiConfig()
+  if (mode === 'direct' && !apiKey.trim()) return
+
+  try {
+    const fresh = await fetchWorkById(workId, apiKey)
+    if (!fresh || worksDetailIndex.value !== ix) return
+    const next = apiWorks.value.slice()
+    next[ix] = { ...next[ix], ...fresh, id: fresh.id }
+    apiWorks.value = next
+  } catch (err) {
+    console.warn('[CET] work refresh failed', workId, err)
+  }
 }
 
-function seedWorksDetailArtistBios() {
-  const ix = worksDetailIndex.value
-  if (ix == null) return
-
-  const next: Record<string, string> = {}
-
-  const sources: WorkArtistBioSource[] = [
-    ...worksDetailArtists.value.map(({ id, authorType, name }) => ({
-      id,
-      authorType,
-      name,
-    })),
-  ]
+async function loadWorksDetailArtistBios() {
+  const artists = worksDetailArtists.value
   const fallback = worksDetailArtistBioFallback.value
-  if (fallback) sources.push(fallback)
+  if (!artists.length && !fallback) return
 
-  for (const source of sources) {
-    const key = worksDetailArtistBioKey(source)
-    const scoped = artistBioGlobalCacheKey(source)
-    const cached = artistBioGlobalCache[scoped]?.trim()
-    if (cached) next[key] = cached
+  const workId = worksDetailCard.value?.id
+  const ix = worksDetailIndex.value
+
+  const sources: WorkArtistBioSource[] = artists.map(({ id, authorType, name }) => ({
+    id,
+    authorType,
+    name,
+  }))
+  if (fallback) {
+    sources.push(fallback)
   }
 
-  const work = apiWorks.value?.[ix]
-  if (work) {
-    for (const [key, bio] of Object.entries(extractArtistBiosFromWork(work, lang.value))) {
-      if (!bio.trim()) continue
-      next[key] = bio
-      artistBioGlobalCache[`${lang.value}:${key}`] = bio
+  const uniqueSources = [...new Map(
+    sources.map((source) => [worksDetailArtistBioKey(source), source]),
+  ).values()]
+
+  abortWorksDetailArtistBioFetch()
+  const controller = new AbortController()
+  worksDetailArtistBioAbort = controller
+  worksDetailArtistBiosLoading.value = true
+
+  const { mode, key: apiKey } = getWorksApiConfig()
+  if (mode === 'direct' && !apiKey.trim()) {
+    worksDetailArtistBiosLoading.value = false
+    worksDetailArtistBioAbort = null
+    return
+  }
+
+  try {
+    const workBios =
+      ix != null && apiWorks.value?.[ix]
+        ? extractArtistBiosFromWork(apiWorks.value[ix], lang.value)
+        : {}
+
+    const entries = await Promise.all(
+      uniqueSources.map(async (artist) => {
+        const cacheKey = worksDetailArtistBioKey(artist)
+        try {
+          const bio = await fetchArtistBio(
+            artist,
+            lang.value,
+            apiKey,
+            controller.signal,
+            workId,
+            workBios[cacheKey],
+          )
+          return [cacheKey, bio] as const
+        } catch (err) {
+          if (controller.signal.aborted) return null
+          console.warn('[CET] artist bio fetch failed', artist.name, err)
+          return [cacheKey, workBios[cacheKey] ?? ''] as const
+        }
+      }),
+    )
+
+    if (controller.signal.aborted) return
+
+    const next: Record<string, string> = {}
+    for (const entry of entries) {
+      if (!entry) continue
+      next[entry[0]] = entry[1]
+    }
+    worksDetailArtistBioMap.value = next
+  } finally {
+    if (worksDetailArtistBioAbort === controller) {
+      worksDetailArtistBiosLoading.value = false
+      worksDetailArtistBioAbort = null
     }
   }
+}
 
-  worksDetailArtistBioMap.value = next
+async function prepareWorksDetailArtistBios() {
+  if (!worksDetailHasArtistPage.value) return
+
+  const gen = ++worksDetailPrepareGen
+  worksDetailArtistBioMap.value = {}
+  worksDetailArtistBiosLoading.value = true
+
+  await refreshWorksDetailWorkFromApi()
+  if (gen !== worksDetailPrepareGen || worksDetailIndex.value == null) return
+
+  await loadWorksDetailArtistBios()
 }
 
 function prefetchWorksDetailArtistBios() {
   if (!worksDetailHasArtistPage.value) return
-  void loadWorksDetailArtistBios()
+  void prepareWorksDetailArtistBios()
 }
 
 function worksDetailArtistBioParagraphs(artist: { id: number; authorType: string }) {
@@ -938,7 +1008,6 @@ function openWorksDetail(index: number) {
   worksDetailArtistPhotoFailed.value = {}
   worksDetailArtistPhotoLoaded.value = {}
   abortWorksDetailArtistBioFetch()
-  seedWorksDetailArtistBios()
   prefetchWorksDetailArtistBios()
   nextTick(() => document.getElementById('works-detail-title')?.focus())
 }
@@ -1067,90 +1136,13 @@ function openWorksDetailByProgram(program: { name: string }) {
 function closeWorksDetail() {
   worksDetailIndex.value = null
   worksDetailPageIx.value = 0
+  worksDetailPrepareGen += 1
   abortWorksDetailArtistBioFetch()
 }
 
 function abortWorksDetailArtistBioFetch() {
   worksDetailArtistBioAbort?.abort()
   worksDetailArtistBioAbort = null
-}
-
-async function loadWorksDetailArtistBios() {
-  const artists = worksDetailArtists.value
-  const fallback = worksDetailArtistBioFallback.value
-  if (!artists.length && !fallback) return
-
-  const workId = worksDetailCard.value?.id
-
-  const sources: WorkArtistBioSource[] = artists.map(({ id, authorType, name }) => ({
-    id,
-    authorType,
-    name,
-  }))
-  if (fallback) {
-    sources.push(fallback)
-  }
-
-  const uniqueSources = [...new Map(
-    sources.map((source) => [worksDetailArtistBioKey(source), source]),
-  ).values()]
-
-  // 一律向 API 重新驗證，避免 CMS 更新後仍顯示舊介紹；有種子文時不顯示 loading
-  const hasAnySeededBio = uniqueSources.some((artist) =>
-    !!worksDetailArtistBioMap.value[worksDetailArtistBioKey(artist)]?.trim(),
-  )
-
-  abortWorksDetailArtistBioFetch()
-  const controller = new AbortController()
-  worksDetailArtistBioAbort = controller
-  if (!hasAnySeededBio) {
-    worksDetailArtistBiosLoading.value = true
-  }
-
-  const { mode, key: apiKey } = getWorksApiConfig()
-  if (mode === 'direct' && !apiKey.trim()) {
-    worksDetailArtistBiosLoading.value = false
-    worksDetailArtistBioAbort = null
-    return
-  }
-
-  try {
-    const entries = await Promise.all(
-      uniqueSources.map(async (artist) => {
-        const cacheKey = worksDetailArtistBioKey(artist)
-        try {
-          const bio = await fetchArtistBio(
-            artist,
-            lang.value,
-            apiKey,
-            controller.signal,
-            workId,
-          )
-          return [cacheKey, bio] as const
-        } catch (err) {
-          if (controller.signal.aborted) return null
-          console.warn('[CET] artist bio fetch failed', artist.name, err)
-          // 請求失敗時保留既有種子／快取，避免把畫面洗成空白
-          return null
-        }
-      }),
-    )
-
-    if (controller.signal.aborted) return
-
-    const next = { ...worksDetailArtistBioMap.value }
-    for (const entry of entries) {
-      if (!entry) continue
-      next[entry[0]] = entry[1]
-      artistBioGlobalCache[`${lang.value}:${entry[0]}`] = entry[1]
-    }
-    worksDetailArtistBioMap.value = next
-  } finally {
-    if (worksDetailArtistBioAbort === controller) {
-      worksDetailArtistBiosLoading.value = false
-      worksDetailArtistBioAbort = null
-    }
-  }
 }
 
 function worksDetailSetPage(index: number) {
@@ -1162,7 +1154,7 @@ function worksDetailSetPage(index: number) {
   worksDetailPageIx.value = next
   if (next === 1) {
     stopWorksDetailAutoplay()
-    void loadWorksDetailArtistBios()
+    void prepareWorksDetailArtistBios()
   } else {
     restartWorksDetailAutoplay()
   }
@@ -1443,7 +1435,6 @@ watch(lang, (l) => {
     worksDetailArtistBioMap.value = {}
     worksDetailArtistBiosLoading.value = false
     abortWorksDetailArtistBioFetch()
-    seedWorksDetailArtistBios()
     if (worksDetailHasArtistPage.value) {
       prefetchWorksDetailArtistBios()
     }

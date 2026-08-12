@@ -290,17 +290,34 @@ export const messages = {
         '主辦單位保有調整與變更活動之權利。',
       ],
       ticketsItems: [
-        { kind: 'item', text: '採現場排隊依序入場，場內人數額滿為止。' },
-        { kind: 'note', text: '＊註：8/28(五) 為現場表演，入場方式請見【索票節目】說明。' },
-        { kind: 'item', text: '場內人數上限為100人，若額滿請等候場內觀眾離場後，依現場人數管制進場。' },
-        { kind: 'item', text: '開放入場時若排隊人員不在現場即視同放棄，需重新排隊依序等候入場。' },
+        {
+          kind: 'lead',
+          text: '詳細節目資訊請至「FUTURE VISION LAB @ 晴空季」官網查詢：',
+          url: 'https://fvl.clab.org.tw/event/skyward',
+        },
+        { kind: 'item', text: '採現場排隊依序入場，直到該梯次人數額滿（120人）為止。' },
+        { kind: 'note', text: '*註：8/28(五) 為現場表演，入場方式請見【索票節目】說明。' },
+        {
+          kind: 'item',
+          text: '每梯次體驗約15-20分鐘（依作品長度而異），播映結束後請依現場工作人員引導離場。',
+        },
+        { kind: 'item', text: '觀影過程中，不開放觀眾中途入場，僅可離場。' },
+        {
+          kind: 'item',
+          text: '開放入場時，若排隊者未在現場，視同放棄本次入場資格，需重新排隊等候、依序入場。',
+        },
+        {
+          kind: 'item',
+          text: '若輪到您入場時，因個人因素（如欲欣賞其他作品、同行友人尚未抵達等）而不進場，則視同放棄本次入場資格，需至排隊隊伍尾端重新排隊等候、依序入場。',
+        },
+        { kind: 'item', text: '無法指定梯次進場，皆依現場排隊順序安排。' },
         { kind: 'heading', text: '【索票節目】' },
-        { kind: 'lead', text: '索票節目共1檔：8/28(五) 17:00 / 19:00｜《音像表演》' },
+        { kind: 'lead', text: '索票節目共1檔：8/28(五) 17:00/19:00｜《音像表演》' },
         { kind: 'item', text: '一人一票憑票入場。' },
         { kind: 'item', text: '開演前10分鐘開放入場，並不開放遲到觀眾入場。' },
         {
           kind: 'item',
-          text: '本節目預計在8/5(三)中午12:00於ACCUPASS開放索票。',
+          text: '本節目預計在8/5(三)12:00於ACCUPASS開放索票。',
           inlineLinks: [{ label: 'ACCUPASS', url: ACCUPASS_ORGANIZER_URL }],
         },
         {
@@ -544,23 +561,43 @@ export const messages = {
         'Programs may be subject to change.',
       ],
       ticketsItems: [
-        { kind: 'item', text: 'Entry will be granted in order of on-site queue until capacity is reached.' },
+        {
+          kind: 'lead',
+          text: 'For detailed program information, please visit FUTURE VISION LAB @ Skyward official website: ',
+          url: 'https://fvl.clab.org.tw',
+        },
+        {
+          kind: 'item',
+          text: 'Entry will be granted in order of on-site queue until capacity (120 people) is reached.',
+        },
         {
           kind: 'note',
-          text: '＊Note: Friday, August 28 features a live performance. Please see the Ticketed Events section for admission information.',
+          text: '*Note: Friday, August 28 features a live performance. Please see the Ticketed Events section for admission information.',
         },
         {
           kind: 'item',
-          text: 'The maximum capacity is 100 people. If the venue is full, please wait for audiences exiting before entering according to the capacity control.',
+          text: 'Each session lasts approximately 15–20 minutes, depending on the duration of the work. After the screening, please follow the staff’s instructions when exiting.',
         },
         {
           kind: 'item',
-          text: 'If individuals in the queue are not present when entry opens, they will be considered to have forfeited their places and must rejoin the line in order to wait for entry.',
+          text: 'No entry once the screening has started. Visitors may only leave during the screening.',
+        },
+        {
+          kind: 'item',
+          text: 'If you are not present when entry begins, you will lose your place and need to rejoin the queue.',
+        },
+        {
+          kind: 'item',
+          text: 'If you choose not to enter when it is your turn (e.g. to view another work or wait for a companion), you will lose your place and need to rejoin from the end of the queue.',
+        },
+        {
+          kind: 'item',
+          text: 'Entry times cannot be reserved or selected. Admission is based on the order of the queue.',
         },
         { kind: 'heading', text: '【Ticketed Event】' },
         {
           kind: 'lead',
-          text: 'Ticketed Event includes 17:00 & 19:00 on August 28 (Fri.) "D/VJ Live Performance"',
+          text: 'Ticketed Event includes 17:00/19:00 on August 28 (Fri.) “D/VJ Live performance”',
         },
         { kind: 'item', text: 'One person, one ticket admission.' },
         {

@@ -571,8 +571,8 @@ const txt = computed(() => messages[lang.value])
 type AdmissionTicketRow =
   | { kind: 'item'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[]; num: number }
   | { kind: 'heading'; text: string }
-  | { kind: 'note'; text: string }
-  | { kind: 'lead'; text: string }
+  | { kind: 'note'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[] }
+  | { kind: 'lead'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[] }
 
 type AdmissionTextSegment =
   | { type: 'text'; value: string }
@@ -621,7 +621,12 @@ function buildTicketDisplayRows(
       continue
     }
     if (item.kind === 'note' || item.kind === 'lead') {
-      rows.push({ kind: item.kind, text: item.text })
+      rows.push({
+        kind: item.kind,
+        text: item.text,
+        url: item.url,
+        inlineLinks: item.inlineLinks,
+      })
       continue
     }
     num += 1
@@ -1991,7 +1996,21 @@ function scrollToPageTop() {
                     v-else-if="row.kind === 'lead' || row.kind === 'note'"
                     class="admission-panel__aside"
                   >
-                    <p>{{ row.text }}</p>
+                    <p>
+                      <template
+                        v-for="(segment, si) in admissionTicketTextSegments(row)"
+                        :key="`adm-aside-seg-${i}-${si}`"
+                      >
+                        <span v-if="segment.type === 'text'">{{ segment.value }}</span>
+                        <a
+                          v-else
+                          :href="segment.url"
+                          class="admission-panel__link"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >{{ segment.label }}</a>
+                      </template>
+                    </p>
                   </li>
                   <li v-else class="admission-panel__card">
                     <span class="admission-panel__num" aria-hidden="true">{{

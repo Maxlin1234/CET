@@ -290,11 +290,6 @@ export const messages = {
         '主辦單位保有調整與變更活動之權利。',
       ],
       ticketsItems: [
-        {
-          kind: 'lead',
-          text: '詳細節目資訊請至「FUTURE VISION LAB @ 晴空季」官網查詢：',
-          url: 'https://fvl.clab.org.tw/event/skyward',
-        },
         { kind: 'item', text: '採現場排隊依序入場，直到該梯次人數額滿（120人）為止。' },
         { kind: 'note', text: '*註：8/28(五) 為現場表演，入場方式請見【索票節目】說明。' },
         {
@@ -561,11 +556,6 @@ export const messages = {
         'Programs may be subject to change.',
       ],
       ticketsItems: [
-        {
-          kind: 'lead',
-          text: 'For detailed program information, please visit FUTURE VISION LAB @ Skyward official website: ',
-          url: 'https://fvl.clab.org.tw',
-        },
         {
           kind: 'item',
           text: 'Entry will be granted in order of on-site queue until capacity (120 people) is reached.',

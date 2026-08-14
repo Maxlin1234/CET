@@ -575,30 +575,31 @@ export const messages = {
         },
         {
           kind: 'item',
-          text: 'To ease on-site crowding, from Saturday, August 15, admission will switch to a numbered-ticket system.',
-          inlineEmphasis: ['Saturday, August 15', 'numbered-ticket'],
+          text: 'To help alleviate crowds and long queues on site, starting August 15 (Sat.), admission will be managed through a numbered ticket system.',
+          inlineEmphasis: ['starting August 15 (Sat.)', 'a numbered ticket system'],
         },
         {
           kind: 'item',
-          text: 'Numbered tickets for each session of the day will be issued in order in front of the Dome Theatre from 11:30 AM on screening days. 150 tickets will be issued per session.',
-          inlineEmphasis: ['11:30 AM'],
+          text: 'Numbered tickets for all sessions of the day will be distributed in order from 11:30 a.m. in front of the FVL DOME. 150 tickets will be available for each session.',
+          inlineEmphasis: ['in order from 11:30 a.m.'],
         },
         {
           kind: 'item',
-          text: 'Each person may collect only 1 numbered ticket. Collection on behalf of others is not allowed, and sessions cannot be reserved or selected. Tickets will be issued in the order of on-site distribution.',
-          inlineEmphasis: ['Each person may collect only 1 numbered ticket'],
+          text: 'Each person may receive one numbered ticket only. Tickets cannot be collected on behalf of others, and a specific session cannot be requested or selected. Tickets will be distributed in order on a first-come, first-served basis.',
+          inlineEmphasis: ['Each person may receive one numbered ticket only'],
         },
         {
           kind: 'item',
-          text: 'Admission requires a valid numbered ticket for that day. Standby queuing without a numbered ticket is not available.',
+          text: 'Admission is available only with a valid numbered ticket for the day. No standby or waitlist admission will be available.',
         },
         {
           kind: 'item',
-          text: 'Please return to the venue 5 minutes before the session time shown on your numbered ticket, and follow staff instructions to prepare for entry.',
+          text: 'Please return to the venue 5 minutes before the session indicated on your numbered ticket and follow staff instructions to prepare for admission.',
+          inlineEmphasis: ['5 minutes before'],
         },
         {
           kind: 'item',
-          text: 'If you have not arrived by the admission time of the session shown on your numbered ticket, you forfeit admission for that session and cannot defer or switch to another session.',
+          text: 'If you are not present when admission for your designated session begins, your admission eligibility for that session will be forfeited. The ticket cannot be carried over or exchanged for admission to another session.',
         },
         { kind: 'heading', text: '【Ticketed Event】' },
         {

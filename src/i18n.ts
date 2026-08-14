@@ -354,10 +354,7 @@ export const messages = {
     },
     schedule: {
       title: '場次',
-      infoLines: [
-        '入場時間：每週五至日，12:00 – 19:00',
-        '入場方式：隨到隨進，控管場內人數，不需預先索票',
-      ],
+      infoLines: ['入場時間：每週五至日，12:00 – 19:00'],
       emptyDay: '本日無節目',
       weekdays: ['日', '一', '二', '三', '四', '五', '六'],
       eventDates: [
@@ -639,10 +636,7 @@ Responding to the Skyward 2026's curatorial theme, FVL DOME becomes a new percep
     },
     schedule: {
       title: 'Schedule',
-      infoLines: [
-        'Opening hours: Fri–Sun, 12:00 – 19:00',
-        'Admission: Walk-in with on-site capacity control; no reservation required',
-      ],
+      infoLines: ['Opening hours: Fri–Sun, 12:00 – 19:00'],
       emptyDay: 'No programmes on this day',
       weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       eventDates: [

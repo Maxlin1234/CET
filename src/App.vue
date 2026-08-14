@@ -283,12 +283,6 @@ watch([lang, heroMotionOk], async () => {
   if (heroMotionOk.value) setupHeroFontWeightEffect()
 })
 
-const stored = (): Lang | null => {
-  if (typeof localStorage === 'undefined') return null
-  const v = localStorage.getItem('usaf-lang')
-  return v === 'en' || v === 'zh' ? v : null
-}
-
 const heroPhotoWrapRef = ref<HTMLElement | null>(null)
 const heroGridCanvasRef = ref<HTMLCanvasElement | null>(null)
 
@@ -513,8 +507,6 @@ function setupHeroScrollParallax() {
 }
 
 onMounted(async () => {
-  const s = stored()
-  if (s) lang.value = s
   syncHeroMotionPref()
   motionMql = window.matchMedia('(prefers-reduced-motion: reduce)')
   motionMql.addEventListener('change', onHeroMotionMqlChange)
@@ -1487,7 +1479,6 @@ function onWorksMarqueeLostPointerCapture(e: PointerEvent) {
 
 watch(lang, (l) => {
   document.documentElement.lang = l === 'zh' ? 'zh-Hant' : 'en'
-  localStorage.setItem('usaf-lang', l)
   admissionTab.value = 'notes'
   bindWorksMarqueeSizing()
   if (worksDetailIndex.value != null) {

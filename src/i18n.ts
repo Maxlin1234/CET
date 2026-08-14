@@ -290,22 +290,31 @@ export const messages = {
         '主辦單位保有調整與變更活動之權利。',
       ],
       ticketsItems: [
-        { kind: 'item', text: '採現場排隊依序入場，直到該梯次人數額滿（120人）為止。' },
         { kind: 'note', text: '*註：8/28(五) 為現場表演，入場方式請見【索票節目】說明。' },
         {
           kind: 'item',
-          text: '每梯次體驗約15-20分鐘（依作品長度而異），播映結束後請依現場工作人員引導離場。',
-        },
-        { kind: 'item', text: '觀影過程中，不開放觀眾中途入場，僅可離場。' },
-        {
-          kind: 'item',
-          text: '開放入場時，若排隊者未在現場，視同放棄本次入場資格，需重新排隊等候、依序入場。',
+          text: '為紓解現場排隊人潮，自 8/15（六）起，入場方式改採發放號碼牌。',
         },
         {
           kind: 'item',
-          text: '若輪到您入場時，因個人因素（如欲欣賞其他作品、同行友人尚未抵達等）而不進場，則視同放棄本次入場資格，需至排隊隊伍尾端重新排隊等候、依序入場。',
+          text: '於放映日上午 11:30 起，於穹頂劇場前依序發放當日各場次號碼牌，每場次發放 150 張。',
         },
-        { kind: 'item', text: '無法指定梯次進場，皆依現場排隊順序安排。' },
+        {
+          kind: 'item',
+          text: '每人限索取 1 張號碼牌，不接受代取，亦無法指定或選擇場次，將依現場發放順序依序發放。',
+        },
+        {
+          kind: 'item',
+          text: '入場時須憑當日有效號碼牌入場，現場不開放無號碼牌觀眾候補排隊。',
+        },
+        {
+          kind: 'item',
+          text: '請依號碼牌上所示之場次時間，於該場次開始前 5 分鐘返回現場，依工作人員引導準備入場。',
+        },
+        {
+          kind: 'item',
+          text: '若逾號碼牌所示場次之入場時間仍未到場，視同放棄該場次入場資格，且無法順延或更換至其他場次入場。',
+        },
         { kind: 'heading', text: '【索票節目】' },
         { kind: 'lead', text: '索票節目共1檔：8/28(五) 17:00/19:00｜《音像表演》' },
         { kind: 'item', text: '一人一票憑票入場。' },
@@ -557,32 +566,32 @@ export const messages = {
       ],
       ticketsItems: [
         {
-          kind: 'item',
-          text: 'Entry will be granted in order of on-site queue until capacity (120 people) is reached.',
-        },
-        {
           kind: 'note',
           text: '*Note: Friday, August 28 features a live performance. Please see the Ticketed Events section for admission information.',
         },
         {
           kind: 'item',
-          text: 'Each session lasts approximately 15–20 minutes, depending on the duration of the work. After the screening, please follow the staff’s instructions when exiting.',
+          text: 'To ease on-site crowding, from Saturday, August 15, admission will switch to a numbered-ticket system.',
         },
         {
           kind: 'item',
-          text: 'No entry once the screening has started. Visitors may only leave during the screening.',
+          text: 'Numbered tickets for each session of the day will be issued in order in front of the Dome Theatre from 11:30 AM on screening days. 150 tickets will be issued per session.',
         },
         {
           kind: 'item',
-          text: 'If you are not present when entry begins, you will lose your place and need to rejoin the queue.',
+          text: 'Each person may collect only 1 numbered ticket. Collection on behalf of others is not allowed, and sessions cannot be reserved or selected. Tickets will be issued in the order of on-site distribution.',
         },
         {
           kind: 'item',
-          text: 'If you choose not to enter when it is your turn (e.g. to view another work or wait for a companion), you will lose your place and need to rejoin from the end of the queue.',
+          text: 'Admission requires a valid numbered ticket for that day. Standby queuing without a numbered ticket is not available.',
         },
         {
           kind: 'item',
-          text: 'Entry times cannot be reserved or selected. Admission is based on the order of the queue.',
+          text: 'Please return to the venue 5 minutes before the session time shown on your numbered ticket, and follow staff instructions to prepare for entry.',
+        },
+        {
+          kind: 'item',
+          text: 'If you have not arrived by the admission time of the session shown on your numbered ticket, you forfeit admission for that session and cannot defer or switch to another session.',
         },
         { kind: 'heading', text: '【Ticketed Event】' },
         {

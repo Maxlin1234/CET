@@ -569,42 +569,88 @@ onUnmounted(() => {
 const txt = computed(() => messages[lang.value])
 
 type AdmissionTicketRow =
-  | { kind: 'item'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[]; num: number }
+  | {
+      kind: 'item'
+      text: string
+      url?: string
+      inlineLinks?: readonly AdmissionInlineLink[]
+      inlineEmphasis?: readonly string[]
+      num: number
+    }
   | { kind: 'heading'; text: string }
-  | { kind: 'note'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[] }
-  | { kind: 'lead'; text: string; url?: string; inlineLinks?: readonly AdmissionInlineLink[] }
+  | {
+      kind: 'note'
+      text: string
+      url?: string
+      inlineLinks?: readonly AdmissionInlineLink[]
+      inlineEmphasis?: readonly string[]
+    }
+  | {
+      kind: 'lead'
+      text: string
+      url?: string
+      inlineLinks?: readonly AdmissionInlineLink[]
+      inlineEmphasis?: readonly string[]
+    }
 
 type AdmissionTextSegment =
   | { type: 'text'; value: string }
   | { type: 'link'; label: string; url: string }
+  | { type: 'emphasis'; value: string }
+
+type AdmissionTextMark =
+  | { type: 'link'; start: number; end: number; label: string; url: string }
+  | { type: 'emphasis'; start: number; end: number; value: string }
 
 function admissionTicketTextSegments(row: {
   text: string
   url?: string
   inlineLinks?: readonly AdmissionInlineLink[]
+  inlineEmphasis?: readonly string[]
 }): AdmissionTextSegment[] {
+  const marks: AdmissionTextMark[] = []
+  for (const link of row.inlineLinks ?? []) {
+    const start = row.text.indexOf(link.label)
+    if (start < 0) continue
+    marks.push({
+      type: 'link',
+      start,
+      end: start + link.label.length,
+      label: link.label,
+      url: link.url,
+    })
+  }
+  for (const label of row.inlineEmphasis ?? []) {
+    const start = row.text.indexOf(label)
+    if (start < 0) continue
+    marks.push({
+      type: 'emphasis',
+      start,
+      end: start + label.length,
+      value: label,
+    })
+  }
+  marks.sort((a, b) => a.start - b.start)
+
   const segments: AdmissionTextSegment[] = []
-  const links = row.inlineLinks ?? []
-  if (!links.length) {
+  let cursor = 0
+  for (const mark of marks) {
+    if (mark.start < cursor) continue
+    if (mark.start > cursor) {
+      segments.push({ type: 'text', value: row.text.slice(cursor, mark.start) })
+    }
+    if (mark.type === 'link') {
+      segments.push({ type: 'link', label: mark.label, url: mark.url })
+    } else {
+      segments.push({ type: 'emphasis', value: mark.value })
+    }
+    cursor = mark.end
+  }
+  if (cursor < row.text.length) {
+    segments.push({ type: 'text', value: row.text.slice(cursor) })
+  } else if (!segments.length) {
     segments.push({ type: 'text', value: row.text })
-    if (row.url) segments.push({ type: 'link', label: row.url, url: row.url })
-    return segments
   }
-
-  let remainder = row.text
-  const orderedLinks = [...links].sort(
-    (a, b) => row.text.indexOf(a.label) - row.text.indexOf(b.label),
-  )
-
-  for (const link of orderedLinks) {
-    const index = remainder.indexOf(link.label)
-    if (index < 0) continue
-    if (index > 0) segments.push({ type: 'text', value: remainder.slice(0, index) })
-    segments.push({ type: 'link', label: link.label, url: link.url })
-    remainder = remainder.slice(index + link.label.length)
-  }
-
-  if (remainder) segments.push({ type: 'text', value: remainder })
   if (row.url) segments.push({ type: 'link', label: row.url, url: row.url })
   return segments
 }
@@ -626,11 +672,19 @@ function buildTicketDisplayRows(
         text: item.text,
         url: item.url,
         inlineLinks: item.inlineLinks,
+        inlineEmphasis: item.inlineEmphasis,
       })
       continue
     }
     num += 1
-    rows.push({ kind: 'item', text: item.text, url: item.url, inlineLinks: item.inlineLinks, num })
+    rows.push({
+      kind: 'item',
+      text: item.text,
+      url: item.url,
+      inlineLinks: item.inlineLinks,
+      inlineEmphasis: item.inlineEmphasis,
+      num,
+    })
   }
   return rows
 }
@@ -2002,6 +2056,10 @@ function scrollToPageTop() {
                         :key="`adm-aside-seg-${i}-${si}`"
                       >
                         <span v-if="segment.type === 'text'">{{ segment.value }}</span>
+                        <strong
+                          v-else-if="segment.type === 'emphasis'"
+                          class="admission-panel__em"
+                        >{{ segment.value }}</strong>
                         <a
                           v-else
                           :href="segment.url"
@@ -2022,6 +2080,10 @@ function scrollToPageTop() {
                         :key="`adm-seg-${i}-${si}`"
                       >
                         <span v-if="segment.type === 'text'">{{ segment.value }}</span>
+                        <strong
+                          v-else-if="segment.type === 'emphasis'"
+                          class="admission-panel__em"
+                        >{{ segment.value }}</strong>
                         <a
                           v-else
                           :href="segment.url"
@@ -3808,6 +3870,11 @@ a:hover {
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-on-surface);
+}
+
+.admission-panel__em {
+  font-weight: 700;
+  color: var(--palette-blue);
 }
 
 .admission-panel__link {

@@ -12,6 +12,7 @@ export type AdmissionTicketItem = {
   text: string
   url?: string
   inlineLinks?: readonly AdmissionInlineLink[]
+  inlineEmphasis?: readonly string[]
 }
 
 const ACCUPASS_ORGANIZER_URL =
@@ -294,14 +295,17 @@ export const messages = {
         {
           kind: 'item',
           text: '為紓解現場排隊人潮，自 8/15（六）起，入場方式改採發放號碼牌。',
+          inlineEmphasis: ['8/15（六）起', '發放號碼牌'],
         },
         {
           kind: 'item',
           text: '於放映日上午 11:30 起，於穹頂劇場前依序發放當日各場次號碼牌，每場次發放 150 張。',
+          inlineEmphasis: ['上午 11:30 起'],
         },
         {
           kind: 'item',
           text: '每人限索取 1 張號碼牌，不接受代取，亦無法指定或選擇場次，將依現場發放順序依序發放。',
+          inlineEmphasis: ['每人限索取 1 張號碼牌'],
         },
         {
           kind: 'item',
@@ -572,14 +576,17 @@ export const messages = {
         {
           kind: 'item',
           text: 'To ease on-site crowding, from Saturday, August 15, admission will switch to a numbered-ticket system.',
+          inlineEmphasis: ['Saturday, August 15', 'numbered-ticket'],
         },
         {
           kind: 'item',
           text: 'Numbered tickets for each session of the day will be issued in order in front of the Dome Theatre from 11:30 AM on screening days. 150 tickets will be issued per session.',
+          inlineEmphasis: ['11:30 AM'],
         },
         {
           kind: 'item',
           text: 'Each person may collect only 1 numbered ticket. Collection on behalf of others is not allowed, and sessions cannot be reserved or selected. Tickets will be issued in the order of on-site distribution.',
+          inlineEmphasis: ['Each person may collect only 1 numbered ticket'],
         },
         {
           kind: 'item',

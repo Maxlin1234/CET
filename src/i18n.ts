@@ -199,11 +199,11 @@ export const UNIT_ACCENT_PROGRAM_GROUPS = [
 const AUG_SET_D_DATES = ['2026-08-28'] as const
 
 const zhAugSetDPrograms = [
-  { name: '音像表演', duration: '50 mins', region: '臺灣' },
+  { name: '音像表演', duration: '45 mins', region: '臺灣' },
 ] as const
 
 const enAugSetDPrograms = [
-  { name: 'D/VJ Live Performance', duration: '50 mins', region: 'Taiwan' },
+  { name: 'D/VJ Live Performance', duration: '45 mins', region: 'Taiwan' },
 ] as const
 
 /** 節目表（中／英）→ 作品 API 標題關鍵字；供場次點擊開啟作品詳情 */

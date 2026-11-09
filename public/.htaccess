@@ -1,0 +1,11 @@
+<IfModule mod_authz_core.c>
+  <Files "unzip-secret.php">
+    Require all denied
+  </Files>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  <Files "unzip-secret.php">
+    Order allow,deny
+    Deny from all
+  </Files>
+</IfModule>

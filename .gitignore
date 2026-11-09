@@ -1,5 +1,8 @@
 node_modules
 dist
+.env
 .env.local
 .env.*.local
+unzip-secret.php
+public/unzip-secret.php
 .DS_Store

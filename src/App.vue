@@ -7,7 +7,6 @@ import {
   fetchArtistBio,
   fetchProjectWorks,
   fetchWorkById,
-  getWorksApiConfig,
   mapUnzipWorkToCard,
   type UnzipWork,
 } from '@/api/unzipWorks'
@@ -703,11 +702,8 @@ function workCardMarqueeText(card: { body: string }): string {
 }
 
 async function loadWorksFromApi() {
-  const { mode, url, key } = getWorksApiConfig()
-  if (mode === 'direct' && !key) return
-
   try {
-    const items = await fetchProjectWorks(url, key)
+    const items = await fetchProjectWorks()
     apiWorks.value = items
     await nextTick()
     measureWorksMarqueeSegment()
@@ -857,11 +853,8 @@ async function refreshWorksDetailWorkFromApi() {
   const workId = worksDetailCard.value?.id
   if (ix == null || workId == null || !apiWorks.value) return
 
-  const { mode, key: apiKey } = getWorksApiConfig()
-  if (mode === 'direct' && !apiKey.trim()) return
-
   try {
-    const fresh = await fetchWorkById(workId, apiKey)
+    const fresh = await fetchWorkById(workId)
     if (!fresh || worksDetailIndex.value !== ix) return
     const next = apiWorks.value.slice()
     next[ix] = { ...next[ix], ...fresh, id: fresh.id }
@@ -897,13 +890,6 @@ async function loadWorksDetailArtistBios() {
   worksDetailArtistBioAbort = controller
   worksDetailArtistBiosLoading.value = true
 
-  const { mode, key: apiKey } = getWorksApiConfig()
-  if (mode === 'direct' && !apiKey.trim()) {
-    worksDetailArtistBiosLoading.value = false
-    worksDetailArtistBioAbort = null
-    return
-  }
-
   try {
     const workBios =
       ix != null && apiWorks.value?.[ix]
@@ -917,7 +903,6 @@ async function loadWorksDetailArtistBios() {
           const bio = await fetchArtistBio(
             artist,
             lang.value,
-            apiKey,
             controller.signal,
             workId,
             workBios[cacheKey],

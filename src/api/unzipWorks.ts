@@ -1,4 +1,5 @@
 import type { Lang } from '@/i18n'
+import { APP_BASE_PATH } from '@/router/index'
 import type { WorkArtist, WorkArtistBioSource, WorkCard } from '@/types/workCard'
 
 type UnzipMedia = {
@@ -66,29 +67,10 @@ type UnzipWorksResponse = {
 const DEFAULT_WORKS_PATH = '/projects/119/works'
 const DEFAULT_WORKS_URL = `https://unzip.clab.org.tw/api/v1${DEFAULT_WORKS_PATH}`
 const WORKS_PAGE_SIZE = 100
-const UNZIP_PROXY_PATH = '/.netlify/functions/unzip'
+const UNZIP_PROXY_PATH = `${APP_BASE_PATH}/unzip.php`
 
-export type WorksApiMode = 'direct' | 'proxy'
-
-export type WorksApiConfig = {
-  mode: WorksApiMode
-  /** direct 模式為完整 works URL；proxy 模式為 function 路徑 */
-  url: string
-  key: string
-}
-
-export function getWorksApiConfig(): WorksApiConfig {
-  const key = String(import.meta.env.VITE_UNZIP_API_KEY ?? '').trim()
-  const url = String(import.meta.env.VITE_UNZIP_WORKS_API_URL ?? DEFAULT_WORKS_URL).trim()
-
-  /** 正式站優先走 Function 代理；若 build 時有 key，代理失敗可改直連 */
-  if (import.meta.env.PROD) {
-    return { mode: 'proxy', url, key }
-  }
-  return { mode: 'direct', url, key }
-}
-
-function worksPathFromConfigUrl(apiUrl: string): string {
+function worksListPath(): string {
+  const apiUrl = String(import.meta.env.VITE_UNZIP_WORKS_API_URL ?? DEFAULT_WORKS_URL).trim()
   try {
     if (apiUrl.startsWith('http')) {
       const parsed = new URL(apiUrl)
@@ -106,54 +88,13 @@ async function fetchUnzipJson<T>(
   query: Record<string, string | number> = {},
   signal?: AbortSignal,
 ): Promise<T> {
-  const config = getWorksApiConfig()
-  const attempts: WorksApiMode[] =
-    config.mode === 'proxy'
-      ? config.key
-        ? ['proxy', 'direct']
-        : ['proxy']
-      : ['direct']
-
-  let lastError: Error | null = null
-
-  for (const mode of attempts) {
-    const { url, headers } =
-      mode === 'proxy'
-        ? buildUnzipRequest(path, query)
-        : buildDirectRequest(path, query, config.key)
-
-    try {
-      // 只用 cache:'no-store'；勿加自訂 Cache-Control／Pragma（會觸發 CORS preflight）
-      const res = await fetch(url, { signal, headers, cache: 'no-store' })
-      if (!res.ok) {
-        throw new Error(`Unzip API failed (${mode}): ${res.status} ${res.statusText}`)
-      }
-      return (await res.json()) as T
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
-      console.warn('[works] fetch failed', { mode, path, error: lastError.message })
-    }
+  const { url, headers } = buildUnzipRequest(path, query)
+  // 只用 cache:'no-store'；勿加自訂 Cache-Control／Pragma（會觸發 CORS preflight）
+  const res = await fetch(url, { signal, headers, cache: 'no-store' })
+  if (!res.ok) {
+    throw new Error(`Unzip API failed: ${res.status} ${res.statusText}`)
   }
-
-  throw lastError ?? new Error('Unzip API request failed')
-}
-
-function buildDirectRequest(
-  path: string,
-  query: Record<string, string | number>,
-  apiKey: string,
-): { url: string; headers: Record<string, string> } {
-  const url = new URL(`https://unzip.clab.org.tw/api/v1${path}`)
-  for (const [key, value] of Object.entries(query)) {
-    url.searchParams.set(key, String(value))
-  }
-  return {
-    url: url.toString(),
-    headers: {
-      Authorization: `Api-Key ${apiKey}`,
-      Accept: 'application/json',
-    },
-  }
+  return (await res.json()) as T
 }
 
 function buildUnzipRequest(
@@ -182,7 +123,6 @@ function hasWorkDescription(work: UnzipWork): boolean {
 
 async function fetchWorkDetail(
   workId: number,
-  _apiKey: string,
   signal?: AbortSignal,
 ): Promise<Pick<UnzipWork, 'note' | 'note_zh_tw' | 'proposal' | 'proposal_zh_tw'> | null> {
   try {
@@ -198,7 +138,6 @@ async function fetchWorkDetail(
 /** 開啟詳情時重抓單筆，讓作品嵌套的藝術家介紹跟著 CMS 更新 */
 export async function fetchWorkById(
   workId: number,
-  _apiKey: string,
   signal?: AbortSignal,
 ): Promise<UnzipWork | null> {
   try {
@@ -212,7 +151,6 @@ export async function fetchWorkById(
 /** 列表 API 可能沒有 note；缺介紹時改抓單筆詳情的 proposal / note */
 async function enrichMissingWorkDescriptions(
   works: UnzipWork[],
-  apiKey: string,
   signal?: AbortSignal,
 ): Promise<UnzipWork[]> {
   const pending = works.filter((work) => !hasWorkDescription(work))
@@ -221,7 +159,7 @@ async function enrichMissingWorkDescriptions(
   await Promise.all(
     pending.map(async (work) => {
       try {
-        const detail = await fetchWorkDetail(work.id, apiKey, signal)
+        const detail = await fetchWorkDetail(work.id, signal)
         if (!detail) return
         work.note = work.note?.trim() || detail.note || null
         work.note_zh_tw = work.note_zh_tw?.trim() || detail.note_zh_tw || null
@@ -236,23 +174,14 @@ async function enrichMissingWorkDescriptions(
   return works
 }
 
-export async function fetchProjectWorks(
-  apiUrl: string,
-  apiKey: string,
-  signal?: AbortSignal,
-): Promise<UnzipWork[]> {
-  const config = getWorksApiConfig()
-  if (config.mode === 'direct' && !apiKey.trim()) {
-    throw new Error('Works API key is missing')
-  }
-
+export async function fetchProjectWorks(signal?: AbortSignal): Promise<UnzipWork[]> {
   const allWorks: UnzipWork[] = []
   let offset = 0
   let total: number | null = null
 
   while (true) {
     const json = await fetchUnzipJson<UnzipWorksResponse>(
-      worksPathFromConfigUrl(apiUrl || config.url),
+      worksListPath(),
       { limit: WORKS_PAGE_SIZE, offset },
       signal,
     )
@@ -275,7 +204,7 @@ export async function fetchProjectWorks(
     offset += batch.length
   }
 
-  return enrichMissingWorkDescriptions(allWorks, apiKey, signal)
+  return enrichMissingWorkDescriptions(allWorks, signal)
 }
 
 function pickLocalizedText(lang: Lang, zh?: string | null, en?: string | null): string {
@@ -559,7 +488,6 @@ async function fetchArtistBioFromWorkDetail(
 export async function fetchArtistBio(
   artist: Pick<WorkArtist, 'id' | 'authorType'>,
   lang: Lang,
-  _apiKey: string,
   signal?: AbortSignal,
   workId?: number,
   /** 已重抓的作品嵌套介紹，避免每名藝術家再打 /works/:id */

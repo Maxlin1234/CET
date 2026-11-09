@@ -6,6 +6,7 @@ declare(strict_types=1);
  * 請把 unzip-secret.php 放在與此檔同一目錄（勿提交 git）。
  */
 
+ini_set('display_errors', '0');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -100,13 +101,21 @@ function unzip_http_get(string $url, string $apiKey): array
     ]);
     $body = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     if ($body === false) {
       return [502, json_encode(['success' => false, 'error' => 'Proxy request failed'])];
     }
     return [$status > 0 ? $status : 502, (string) $body];
   }
 
+  return unzip_http_get_streams($url, $headers);
+}
+
+/**
+ * @param list<string> $headers
+ * @return array{0: int, 1: string}
+ */
+function unzip_http_get_streams(string $url, array $headers): array
+{
   $context = stream_context_create([
     'http' => [
       'method' => 'GET',
@@ -118,7 +127,11 @@ function unzip_http_get(string $url, string $apiKey): array
   ]);
   $body = @file_get_contents($url, false, $context);
   $status = 502;
-  if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $match)) {
+  $responseHeaders = function_exists('http_get_last_response_headers')
+    ? (http_get_last_response_headers() ?? [])
+    : [];
+  $first = $responseHeaders[0] ?? '';
+  if ($first !== '' && preg_match('/\s(\d{3})\s/', $first, $match)) {
     $status = (int) $match[1];
   }
   if ($body === false) {
